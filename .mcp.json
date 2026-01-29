@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "mysql-local": {
+      "command": "node",
+      "args": [
+        "./dist/index.js"
+      ],
+      "env": {
+        "MYSQL_HOST": "127.0.0.1",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "root",
+        "MYSQL_PASS": "",
+        "MYSQL_DB": "",
+        "ALLOW_INSERT_OPERATION": "true",
+        "ALLOW_UPDATE_OPERATION": "true",
+        "ALLOW_DELETE_OPERATION": "true",
+        "ALLOW_DDL_OPERATION": "true",
+        "MYSQL_ENABLE_LOGGING": "true"
+      }
+    }
+  }
+}
