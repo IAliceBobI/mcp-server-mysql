@@ -153,9 +153,9 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("INSERT operation not allowed");
       expect(result.content[0].text).toContain("mcp_test.restricted_table");
-      expect(result.content[0].text).toContain("TABLE_WRITE_WHITELIST");
+      expect(result.content[0].text).toContain("TABLE_INSERT_WHITELIST");
       expect(result.content[0].text).toContain("INSERT INTO mcp_test.restricted_table");
     });
   });
@@ -201,7 +201,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("UPDATE operation not allowed");
       expect(result.content[0].text).toContain("mcp_test.restricted_table");
     });
   });
@@ -245,7 +245,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("DELETE operation not allowed");
     });
   });
 
@@ -273,7 +273,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("INSERT operation not allowed");
     });
   });
 
@@ -287,9 +287,9 @@ describe("Whitelist Integration", () => {
       const errorText = result.content[0].text;
 
       // Check for all required elements
-      expect(errorText).toContain("❌ Error: Write operation not allowed");
+      expect(errorText).toContain("❌ Error: INSERT operation not allowed");
       expect(errorText).toContain("mcp_test.restricted_table");
-      expect(errorText).toContain("TABLE_WRITE_WHITELIST");
+      expect(errorText).toContain("TABLE_INSERT_WHITELIST");
       expect(errorText).toContain("INSERT INTO mcp_test.restricted_table");
       expect(errorText).toContain("💡 To execute this operation");
       expect(errorText).toContain("Ask your administrator");
@@ -297,10 +297,10 @@ describe("Whitelist Integration", () => {
     });
   });
 
-  describe("CREATE TABLE operations bypass whitelist", () => {
-    it("should allow CREATE TABLE for table NOT in whitelist", async () => {
+  describe("CREATE TABLE operations require whitelist", () => {
+    it("should allow CREATE TABLE for table matching CREATE whitelist pattern", async () => {
       const result = await executeReadOnlyQuery(
-        "CREATE TABLE mcp_test.new_created_table (id INT PRIMARY KEY, data VARCHAR(255))"
+        "CREATE TABLE mcp_test.temp_created_table (id INT PRIMARY KEY, data VARCHAR(255))"
       );
 
       expect(result.isError).toBe(false);
@@ -308,19 +308,29 @@ describe("Whitelist Integration", () => {
       // Verify the table was actually created
       const connection = await pool.getConnection();
       try {
-        const [rows] = await connection.query("SHOW TABLES LIKE 'new_created_table'");
+        const [rows] = await connection.query("SHOW TABLES LIKE 'temp_created_table'");
         expect(rows.length).toBeGreaterThan(0);
 
         // Clean up
-        await connection.query("DROP TABLE mcp_test.new_created_table");
+        await connection.query("DROP TABLE mcp_test.temp_created_table");
       } finally {
         connection.release();
       }
     });
 
-    it("should allow CREATE TABLE with IF NOT EXISTS for table NOT in whitelist", async () => {
+    it("should deny CREATE TABLE for table NOT in CREATE whitelist", async () => {
       const result = await executeReadOnlyQuery(
-        "CREATE TABLE IF NOT EXISTS mcp_test.another_new_table (id INT, name TEXT)"
+        "CREATE TABLE mcp_test.restricted_table (id INT PRIMARY KEY)"
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("CREATE operation not allowed");
+      expect(result.content[0].text).toContain("TABLE_DDL_CREATE_WHITELIST");
+    });
+
+    it("should allow CREATE TABLE with IF NOT EXISTS for table in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "CREATE TABLE IF NOT EXISTS mcp_test.temp_another_table (id INT, name TEXT)"
       );
 
       expect(result.isError).toBe(false);
@@ -328,31 +338,11 @@ describe("Whitelist Integration", () => {
       // Verify the table was created
       const connection = await pool.getConnection();
       try {
-        const [rows] = await connection.query("SHOW TABLES LIKE 'another_new_table'");
+        const [rows] = await connection.query("SHOW TABLES LIKE 'temp_another_table'");
         expect(rows.length).toBeGreaterThan(0);
 
         // Clean up
-        await connection.query("DROP TABLE IF EXISTS mcp_test.another_new_table");
-      } finally {
-        connection.release();
-      }
-    });
-
-    it("should allow CREATE TABLE for table in whitelist as well", async () => {
-      const result = await executeReadOnlyQuery(
-        "CREATE TABLE mcp_test.whitelist_new_table (id INT PRIMARY KEY)"
-      );
-
-      expect(result.isError).toBe(false);
-
-      // Verify the table was created
-      const connection = await pool.getConnection();
-      try {
-        const [rows] = await connection.query("SHOW TABLES LIKE 'whitelist_new_table'");
-        expect(rows.length).toBeGreaterThan(0);
-
-        // Clean up
-        await connection.query("DROP TABLE IF EXISTS mcp_test.whitelist_new_table");
+        await connection.query("DROP TABLE IF EXISTS mcp_test.temp_another_table");
       } finally {
         connection.release();
       }
@@ -378,7 +368,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("ALTER operation not allowed");
       expect(result.content[0].text).toContain("mcp_test.restricted_for_alter");
     });
 
@@ -388,7 +378,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("DROP operation not allowed");
     });
 
     it("should allow ALTER TABLE for table in whitelist", async () => {
@@ -433,7 +423,7 @@ describe("Whitelist Integration", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("TRUNCATE operation not allowed");
     });
 
     it("should allow TRUNCATE for table in whitelist", async () => {

@@ -75,7 +75,7 @@ codex mcp add mcp_server_mysql \
   --env MYSQL_USER="root" \
   --env MYSQL_PASS="your_password" \
   --env MYSQL_DB="your_database" \
-  --env TABLE_WRITE_WHITELIST="" \
+  --env TABLE_INSERT_WHITELIST='[]' \
   -- npx -y @benborla29/mcp-server-mysql
 ```
 
@@ -114,7 +114,13 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_WRITE_WHITELIST="" \
+  -e TABLE_INSERT_WHITELIST='[]' \
+  -e TABLE_UPDATE_WHITELIST='[]' \
+  -e TABLE_DELETE_WHITELIST='[]' \
+  -e TABLE_DDL_CREATE_WHITELIST='[]' \
+  -e TABLE_DDL_ALTER_WHITELIST='[]' \
+  -e TABLE_DDL_DROP_WHITELIST='[]' \
+  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -129,7 +135,13 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_WRITE_WHITELIST="" \
+  -e TABLE_INSERT_WHITELIST='[]' \
+  -e TABLE_UPDATE_WHITELIST='[]' \
+  -e TABLE_DELETE_WHITELIST='[]' \
+  -e TABLE_DDL_CREATE_WHITELIST='[]' \
+  -e TABLE_DDL_ALTER_WHITELIST='[]' \
+  -e TABLE_DDL_DROP_WHITELIST='[]' \
+  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
   -e PATH="/path/to/node/bin:/usr/bin:/bin" \
   -e NODE_PATH="/path/to/node/lib/node_modules" \
   -- /path/to/node /full/path/to/mcp-server-mysql/dist/index.js
@@ -151,7 +163,13 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_WRITE_WHITELIST="" \
+  -e TABLE_INSERT_WHITELIST='[]' \
+  -e TABLE_UPDATE_WHITELIST='[]' \
+  -e TABLE_DELETE_WHITELIST='[]' \
+  -e TABLE_DDL_CREATE_WHITELIST='[]' \
+  -e TABLE_DDL_ALTER_WHITELIST='[]' \
+  -e TABLE_DDL_DROP_WHITELIST='[]' \
+  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -217,7 +235,13 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_CACHE_TTL="60000" \
   -e MYSQL_RATE_LIMIT="100" \
   -e MYSQL_SSL="true" \
-  -e TABLE_WRITE_WHITELIST="" \
+  -e TABLE_INSERT_WHITELIST='[]' \
+  -e TABLE_UPDATE_WHITELIST='[]' \
+  -e TABLE_DELETE_WHITELIST='[]' \
+  -e TABLE_DDL_CREATE_WHITELIST='[]' \
+  -e TABLE_DDL_ALTER_WHITELIST='[]' \
+  -e TABLE_DDL_DROP_WHITELIST='[]' \
+  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
   -e ENABLE_LOGGING="true" \
   -- npx @benborla29/mcp-server-mysql
 ```
@@ -445,7 +469,7 @@ When reconfiguring, you can update any of the MySQL connection details as well a
   - SSL/TLS configuration (if your database requires secure connections)
 
 - **Write operation permissions**:
-  - Use `TABLE_WRITE_WHITELIST` to specify which tables can be modified
+  - Use granular `TABLE_*_WHITELIST` variables to specify write permissions per operation type
   - Supports wildcard patterns (e.g., `production.users,*.logs,dev.test_*`)
   - Empty whitelist = all tables are read-only (safe default)
   - Only enable write operations for tables you specifically need Claude to modify
@@ -487,8 +511,14 @@ For more control over the MCP server's behavior, you can use these advanced conf
         "MYSQL_LOG_LEVEL": "info",
         "MYSQL_METRICS_ENABLED": "true",
 
-        // Write permissions - whitelist mode
-        "TABLE_WRITE_WHITELIST": ""
+        // Granular write permissions (JSON arrays)
+        "TABLE_INSERT_WHITELIST": ["[]"],
+        "TABLE_UPDATE_WHITELIST": ["[]"],
+        "TABLE_DELETE_WHITELIST": ["[]"],
+        "TABLE_DDL_CREATE_WHITELIST": ["[]"],
+        "TABLE_DDL_ALTER_WHITELIST": ["[]"],
+        "TABLE_DDL_DROP_WHITELIST": ["[]"],
+        "TABLE_DDL_TRUNCATE_WHITELIST": ["[]"]
       }
     }
   }
@@ -533,7 +563,20 @@ When `MYSQL_CONNECTION_STRING` is provided, it takes precedence over individual 
 - `MYSQL_RATE_LIMIT`: Maximum queries per minute (default: "100")
 - `MYSQL_MAX_QUERY_COMPLEXITY`: Maximum query complexity score (default: "1000")
 - `MYSQL_SSL`: Enable SSL/TLS encryption (default: "false")
-- `TABLE_WRITE_WHITELIST`: Comma-separated list of tables that allow write operations with wildcard support (default: "") - See [Table Whitelist Permissions](#table-whitelist-permissions) for details
+### Granular Whitelist Configuration
+
+**DML (Data Manipulation Language) Operations:**
+- `TABLE_INSERT_WHITELIST`: JSON array of tables where INSERT is allowed (default: [])
+- `TABLE_UPDATE_WHITELIST`: JSON array of tables where UPDATE is allowed (default: [])
+- `TABLE_DELETE_WHITELIST`: JSON array of tables where DELETE is allowed (default: [])
+
+**DDL (Data Definition Language) Operations:**
+- `TABLE_DDL_CREATE_WHITELIST`: JSON array of tables where CREATE TABLE is allowed (default: [])
+- `TABLE_DDL_ALTER_WHITELIST`: JSON array of tables where ALTER TABLE is allowed (default: [])
+- `TABLE_DDL_DROP_WHITELIST`: JSON array of tables where DROP TABLE is allowed (default: [])
+- `TABLE_DDL_TRUNCATE_WHITELIST`: JSON array of tables where TRUNCATE is allowed (default: [])
+
+See [Granular Whitelist Permissions](#granular-whitelist-permissions) for details and examples.
 - `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS`: Disable read-only transaction enforcement (default: "false") ⚠️ **Security Warning:** Only enable this if you need full write capabilities and trust the LLM with your database
 - `MULTI_DB_WRITE_MODE`: Enable write operations in multi-DB mode (default: "false")
 
@@ -574,31 +617,66 @@ USE database_name;
 SELECT * FROM table_name;
 ```
 
-## Table Whitelist Permissions
+## Granular Whitelist Permissions
 
-MCP-Server-MySQL uses a whitelist-based permission system for write operations. All tables are **read-only by default** for security. Only explicitly whitelisted tables can be modified.
+MCP-Server-MySQL uses a **fine-grained whitelist-based permission system** for write operations. Each SQL operation type has its own independent whitelist, allowing precise control over what actions can be performed on which tables.
+
+All tables are **read-only by default** for security. Only explicitly whitelisted tables can be modified, and each operation type is controlled separately.
 
 ### Configuration
 
-Set the `TABLE_WRITE_WHITELIST` environment variable with comma-separated table patterns:
+Configure 7 independent whitelists (one per operation type):
+
+**Environment Variable Format (JSON array string):**
 
 ```bash
-# Allow writes to specific tables
-TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
+# Allow INSERT on specific tables
+TABLE_INSERT_WHITELIST='["production.users", "*.logs"]'
 
-# Allow writes to all tables in a database
-TABLE_WRITE_WHITELIST=production.*
+# Allow UPDATE on specific tables
+TABLE_UPDATE_WHITELIST='["production.users", "production.orders"]'
 
-# Allow writes to all tables (use with caution)
-TABLE_WRITE_WHITELIST=*.*
+# Allow DELETE on specific tables
+TABLE_DELETE_WHITELIST='["production.temp_*"]'
 
-# Empty or unset = all tables are read-only (safe default)
-TABLE_WRITE_WHITELIST=
+# DDL operations
+TABLE_DDL_CREATE_WHITELIST='["production.temp_*"]'
+TABLE_DDL_ALTER_WHITELIST='["production.users"]'
+TABLE_DDL_DROP_WHITELIST='["production.temp_*"]'
+TABLE_DDL_TRUNCATE_WHITELIST='["production.logs"]'
+
+# Empty arrays = all operations of that type are denied (safe default)
+TABLE_INSERT_WHITELIST='[]'
+```
+
+**MCP Configuration File Format (recommended):**
+
+```json
+{
+  "mcpServers": {
+    "mysql-local": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "env": {
+        "MYSQL_HOST": "127.0.0.1",
+        "MYSQL_USER": "root",
+        "MYSQL_DB": "production",
+        "TABLE_INSERT_WHITELIST": ["production.users", "*.logs"],
+        "TABLE_UPDATE_WHITELIST": ["production.users"],
+        "TABLE_DELETE_WHITELIST": ["production.temp_*"],
+        "TABLE_DDL_CREATE_WHITELIST": ["production.temp_*"],
+        "TABLE_DDL_ALTER_WHITELIST": [],
+        "TABLE_DDL_DROP_WHITELIST": [],
+        "TABLE_DDL_TRUNCATE_WHITELIST": ["production.logs"]
+      }
+    }
+  }
+}
 ```
 
 ### Wildcard Patterns
 
-The whitelist supports simple `*` wildcard patterns:
+All whitelists support simple `*` wildcard patterns:
 
 | Pattern | Matches | Does Not Match |
 |---------|---------|----------------|
@@ -606,83 +684,72 @@ The whitelist supports simple `*` wildcard patterns:
 | `*.logs` | `dev.logs`, `prod.logs` | `dev.log_table` |
 | `production.*` | All tables in `production` database | Tables in other databases |
 | `dev.test_*` | `dev.test_1`, `dev.test_temp` | `dev.prod_1` |
-| `*.*` | All tables | None |
+
+**⚠️ Security Warning:** The pattern `*` (match all) is **blocked** as it's too dangerous. Use `db.*` or `*.table` instead.
 
 ### Permission Matrix
 
-| Operation | Whitelisted Tables | Non-Whitelisted Tables |
-|-----------|-------------------|----------------------|
-| SELECT (read) | ✅ Allowed | ✅ Allowed |
-| INSERT (write) | ✅ Allowed | ❌ Denied |
-| UPDATE (write) | ✅ Allowed | ❌ Denied |
-| DELETE (write) | ✅ Allowed | ❌ Denied |
-| DDL (CREATE/ALTER/DROP) | ✅ Allowed | ❌ Denied |
+| Operation | Whitelist Variable | Default | Description |
+|-----------|-------------------|---------|-------------|
+| SELECT | None | ✅ Always allowed | Read operations don't require whitelist |
+| INSERT | `TABLE_INSERT_WHITELIST` | ❌ Denied | Insert new records |
+| UPDATE | `TABLE_UPDATE_WHITELIST` | ❌ Denied | Update existing records |
+| DELETE | `TABLE_DELETE_WHITELIST` | ❌ Denied | Delete records |
+| CREATE TABLE | `TABLE_DDL_CREATE_WHITELIST` | ❌ Denied | Create new tables |
+| ALTER TABLE | `TABLE_DDL_ALTER_WHITELIST` | ❌ Denied | Modify table structure |
+| DROP TABLE | `TABLE_DDL_DROP_WHITELIST` | ❌ Denied | Delete tables |
+| TRUNCATE | `TABLE_DDL_TRUNCATE_WHITELIST` | ❌ Denied | Clear all records |
 
-### Example Configurations
-
-**Claude Code with whitelist:**
-
-```bash
-claude mcp add mcp_server_mysql \
-  -e MYSQL_HOST="127.0.0.1" \
-  -e MYSQL_PORT="3306" \
-  -e MYSQL_USER="root" \
-  -e MYSQL_PASS="your_password" \
-  -e MYSQL_DB="production" \
-  -e TABLE_WRITE_WHITELIST="production.users,production.temp_*" \
-  -- npx @benborla29/mcp-server-mysql
-```
-
-**Claude Desktop configuration:**
+### Example: Different Permissions per Table
 
 ```json
 {
-  "mcpServers": {
-    "mcp_server_mysql": {
-      "command": "/path/to/node",
-      "args": ["/full/path/to/mcp-server-mysql/dist/index.js"],
-      "env": {
-        "MYSQL_HOST": "127.0.0.1",
-        "MYSQL_PORT": "3306",
-        "MYSQL_USER": "root",
-        "MYSQL_PASS": "your_password",
-        "MYSQL_DB": "production",
-        "TABLE_WRITE_WHITELIST": "production.users,production.temp_*"
-      }
-    }
-  }
+  "TABLE_INSERT_WHITELIST": ["production.users", "production.orders"],
+  "TABLE_UPDATE_WHITELIST": ["production.users"],
+  "TABLE_DELETE_WHITELIST": ["production.temp_*"],
+  "TABLE_DDL_CREATE_WHITELIST": ["production.temp_*"],
+  "TABLE_DDL_ALTER_WHITELIST": [],
+  "TABLE_DDL_DROP_WHITELIST": [],
+  "TABLE_DDL_TRUNCATE_WHITELIST": ["production.logs"]
 }
 ```
 
+**Result:**
+- ✅ Can INSERT into `production.users` and `production.orders`
+- ✅ Can UPDATE `production.users` only
+- ❌ Cannot UPDATE `production.orders` (not in UPDATE whitelist)
+- ✅ Can DELETE from `production.temp_*` tables
+- ✅ Can CREATE new tables matching `production.temp_*`
+- ❌ Cannot ALTER any tables (empty whitelist)
+- ✅ Can TRUNCATE `production.logs`
+
 ### Error Messages
 
-When AI attempts to write to a non-whitelisted table, it receives a clear error message with:
+When an operation is denied, the error message clearly indicates:
 
-- ❌ Error notification
-- Table name that was denied
-- The SQL query that was blocked
-- Instructions for how to proceed (ask admin or execute manually)
+- ❌ Which operation was rejected (INSERT/UPDATE/DELETE/etc.)
+- 🔒 Which whitelist the table is not in
+- 📝 The SQL query that was blocked
+- 💡 Instructions for how to proceed
 
-### Migration from Old System
+**Example error:**
 
-If you were using the old `ALLOW_*_OPERATION` or `SCHEMA_*_PERMISSIONS` system:
+```
+❌ Error: INSERT operation not allowed
 
-**Old configuration:**
+Table: 'production.orders' is not in the TABLE_INSERT_WHITELIST whitelist.
 
-```bash
-ALLOW_INSERT_OPERATION=true
-ALLOW_UPDATE_OPERATION=true
-SCHEMA_INSERT_PERMISSIONS=development:true,testing:true
+🔒 This table does not have INSERT permissions.
+
+📝 SQL Query:
+INSERT INTO production.orders (user_id, total) VALUES (1, 100.00)
+
+💡 To execute this operation:
+1. Ask your administrator to add this table to TABLE_INSERT_WHITELIST
+2. Or execute the SQL manually in your database client
 ```
 
-**New configuration:**
-
-```bash
-# One line replaces all old permission configs
-TABLE_WRITE_WHITELIST=development.*,testing.*
-```
-
-For complete details, see [docs/plans/2026-01-29-table-whitelist-permissions-design.md](./docs/plans/2026-01-29-table-whitelist-permissions-design.md).
+For complete design details, see [docs/plans/2026-01-29-granular-whitelist-design.md](./docs/plans/2026-01-29-granular-whitelist-design.md).
 
 ## Testing
 

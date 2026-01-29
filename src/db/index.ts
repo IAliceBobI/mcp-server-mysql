@@ -1,8 +1,8 @@
 import { performance } from "perf_hooks";
 import { isMultiDbMode } from "./../config/index.js";
 
-import { isTableInWriteWhitelist } from "./permissions.js";
-import { extractTableFromQuery, formatWriteDeniedError, getQueryTypes } from "./utils.js";
+import { checkTablePermission } from "./permissions.js";
+import { extractTableFromQuery, formatOperationDeniedError, getQueryTypes, getWhitelistNameForOperation } from "./utils.js";
 
 import * as mysql2 from "mysql2/promise";
 import { log } from "./../utils/index.js";
@@ -177,44 +177,46 @@ async function executeReadOnlyQuery<T>(sql: string): Promise<T> {
     // 2. Extract table name from query
     const table = extractTableFromQuery(sql);
 
-    // 3. Check if this is a write operation
-    const isWriteOperation = queryTypes.some((type) =>
-      ["insert", "update", "delete", "create", "alter", "drop", "truncate"].includes(type)
-    );
+    // 3. Check if this is a write operation (DML or DDL)
+    const writeOperationTypes = ["insert", "update", "delete", "create", "alter", "drop", "truncate"];
+    const isWriteOperation = queryTypes.some((type) => writeOperationTypes.includes(type));
 
-    // 3.1 Check if this is a CREATE TABLE operation
-    const isCreateTable = queryTypes.some((type) => type === "create");
-
-    // 4. Handle write operations
+    // 4. Handle write operations with granular whitelist checking
     if (isWriteOperation && table) {
-      // CREATE TABLE is always allowed
-      if (isCreateTable) {
-        log("info", `CREATE TABLE operation allowed for table '${table}' (whitelist bypassed)`);
-        return executeWriteQuery(sql);
-      }
+      // Determine the specific operation type for permission checking
+      let operationType: string | null = null;
 
-      // Other write operations require whitelist
-      if (!isTableInWriteWhitelist(table)) {
+      // Check in priority order (some queries may have multiple types)
+      if (queryTypes.includes("insert")) operationType = "insert";
+      else if (queryTypes.includes("update")) operationType = "update";
+      else if (queryTypes.includes("delete")) operationType = "delete";
+      else if (queryTypes.includes("create")) operationType = "create";
+      else if (queryTypes.includes("alter")) operationType = "alter";
+      else if (queryTypes.includes("drop")) operationType = "drop";
+      else if (queryTypes.includes("truncate")) operationType = "truncate";
+
+      // Check permission for this specific operation type
+      if (operationType && !checkTablePermission(table, operationType)) {
         log(
           "error",
-          `Write operation not allowed for table '${table}'. Table is not in TABLE_WRITE_WHITELIST.`,
+          `${operationType.toUpperCase()} operation not allowed for table '${table}'. Table is not in the ${getWhitelistNameForOperation(operationType)}.`,
         );
         return {
           content: [
             {
               type: "text",
-              text: formatWriteDeniedError(table, sql),
+              text: formatOperationDeniedError(operationType, table, sql),
             },
           ],
           isError: true,
         } as T;
       }
 
-      // Whitelisted write operation
+      // Permission granted - execute the write operation
       return executeWriteQuery(sql);
     }
 
-    // 6. Read operation or table-less query → normal execution
+    // 5. Read operation or table-less query → normal execution
 
     // For read-only operations, continue with the original logic
     const pool = await getPool();

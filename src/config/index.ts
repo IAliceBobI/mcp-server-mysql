@@ -17,13 +17,103 @@ if (process.env.NODE_ENV === "test" && !process.env.MYSQL_DB) {
   process.env.MYSQL_DB = "mcp_test_db"; // @INFO: Ensure we have a database name for tests
 }
 
-// Table write whitelist configuration
-// Supports comma-separated patterns with wildcards, e.g., "production.users,*.logs,dev.test_*"
-// Empty or unset = all tables are read-only (security-first default)
-const whitelistEnv = process.env.TABLE_WRITE_WHITELIST || "";
-export const TABLE_WRITE_WHITELIST = whitelistEnv
-  ? whitelistEnv.split(",").map((s) => s.trim()).filter(Boolean)
-  : [];
+// ============================================================================
+// GRANULAR WHITELIST PERMISSION SYSTEM
+// ============================================================================
+
+/**
+ * Validate a whitelist pattern for security and correctness
+ * @param pattern - The whitelist pattern to validate
+ * @returns true if pattern is valid, false otherwise
+ */
+function validateWhitelistPattern(pattern: string): boolean {
+  const trimmed = pattern.trim();
+
+  // Reject empty strings
+  if (!trimmed) {
+    console.warn(`[Whitelist] Empty pattern detected, skipping`);
+    return false;
+  }
+
+  // Reject dangerous wildcard that matches all tables
+  if (trimmed === "*") {
+    console.error(`[Whitelist] Dangerous pattern "*" detected - would match all tables. Use explicit patterns like "db.*" or "*.table"`);
+    return false;
+  }
+
+  // Ensure pattern contains at least one non-wildcard, non-dot character
+  const hasNonWildcard = /[^\*\.]/.test(trimmed);
+  if (!hasNonWildcard) {
+    console.error(`[Whitelist] Invalid pattern "${trimmed}" - must contain at least one concrete character`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Parse whitelist environment variable
+ * Supports:
+ * - Array format (MCP config): ["db.table", "*.logs"]
+ * - JSON string format (env vars): '["db.table", "*.logs"]'
+ * @param envValue - Environment variable value
+ * @returns Array of validated whitelist patterns
+ */
+function parseWhitelistEnv(envValue: any): string[] {
+  if (!envValue) {
+    return [];
+  }
+
+  let patterns: string[];
+
+  // Handle array format (MCP configuration)
+  if (Array.isArray(envValue)) {
+    patterns = envValue;
+  }
+  // Handle JSON string format (environment variables)
+  else if (typeof envValue === 'string') {
+    try {
+      patterns = JSON.parse(envValue);
+      if (!Array.isArray(patterns)) {
+        console.error(`[Whitelist] JSON must represent an array. Got: ${typeof patterns}`);
+        return [];
+      }
+    } catch (err) {
+      console.error(`[Whitelist] Invalid JSON format: ${envValue}`);
+      console.error(`[Whitelist] Please use format: '["db.table", "*.logs"]'`);
+      return [];
+    }
+  }
+  // Invalid format
+  else {
+    console.error(`[Whitelist] Configuration must be an array or JSON string. Got: ${typeof envValue}`);
+    return [];
+  }
+
+  // Validate each pattern
+  return patterns
+    .map((p) => String(p).trim())
+    .filter(validateWhitelistPattern);
+}
+
+// ============================================================================
+// OPERATION-SPECIFIC WHITELISTS
+// ============================================================================
+// Each whitelist controls access for a specific SQL operation type.
+// Empty array = all operations of that type are denied (security-first default).
+// All whitelists support wildcard patterns: "db.*", "*.table", "db.test_*"
+
+// DML (Data Manipulation Language) Operations
+export const TABLE_SELECT_WHITELIST: string[] = []; // SELECT is always allowed, no whitelist needed
+export const TABLE_INSERT_WHITELIST = parseWhitelistEnv(process.env.TABLE_INSERT_WHITELIST);
+export const TABLE_UPDATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_UPDATE_WHITELIST);
+export const TABLE_DELETE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DELETE_WHITELIST);
+
+// DDL (Data Definition Language) Operations
+export const TABLE_DDL_CREATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_CREATE_WHITELIST);
+export const TABLE_DDL_ALTER_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_ALTER_WHITELIST);
+export const TABLE_DDL_DROP_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_DROP_WHITELIST);
+export const TABLE_DDL_TRUNCATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_TRUNCATE_WHITELIST);
 
 // Transaction mode control
 export const MYSQL_DISABLE_READ_ONLY_TRANSACTIONS =

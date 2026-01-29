@@ -92,7 +92,14 @@ pnpm lint
 - Key exports:
   - `mcpConfig` - MySQL connection configuration
   - `isMultiDbMode` - Boolean indicating multi-database mode
-  - `TABLE_WRITE_WHITELIST` - Table whitelist for write operations with wildcard support
+  - Granular whitelist constants (7 operation-specific whitelists):
+    - `TABLE_INSERT_WHITELIST` - Tables where INSERT is allowed
+    - `TABLE_UPDATE_WHITELIST` - Tables where UPDATE is allowed
+    - `TABLE_DELETE_WHITELIST` - Tables where DELETE is allowed
+    - `TABLE_DDL_CREATE_WHITELIST` - Tables where CREATE TABLE is allowed
+    - `TABLE_DDL_ALTER_WHITELIST` - Tables where ALTER TABLE is allowed
+    - `TABLE_DDL_DROP_WHITELIST` - Tables where DROP TABLE is allowed
+    - `TABLE_DDL_TRUNCATE_WHITELIST` - Tables where TRUNCATE is allowed
   - `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS` - Control transaction mode
 
 **Database Layer (`src/db/index.ts`)**
@@ -107,17 +114,20 @@ pnpm lint
 
 **Permissions (`src/db/permissions.ts`)**
 
-- Whitelist-based permission checking functions:
-  - `isTableInWriteWhitelist(tableFullName)` - Checks if a table is in the write whitelist
+- Granular whitelist-based permission checking functions:
+  - `checkTablePermission(table, operation)` - Unified permission checker for all operation types
+  - `getWhitelistForOperation(operation)` - Returns whitelist for a specific operation
   - `matchWildcard(table, pattern)` - Matches table names against wildcard patterns
-- Default behavior: All tables are read-only unless explicitly whitelisted
+- Default behavior: All tables are read-only for each operation type unless explicitly whitelisted
 - Supports wildcard patterns: `*.logs`, `production.*`, `dev.test_*`
+- Security validation: Blocks dangerous patterns like single `*`
 
 **SQL Parsing (`src/db/utils.ts`)**
 
 - `getQueryTypes()` - Parses SQL using `node-sql-parser` to identify operation types
 - `extractTableFromQuery()` - Extracts full table name (with database prefix) from SQL queries
-- `formatWriteDeniedError()` - Formats user-friendly error messages for write operation denials
+- `formatOperationDeniedError(operation, table, sql)` - Formats user-friendly error messages for operation denials
+- `getWhitelistNameForOperation(operation)` - Returns environment variable name for an operation
 
 **General Utilities (`src/utils/index.ts`)**
 
@@ -159,17 +169,27 @@ When `MYSQL_DB` environment variable is empty or unset:
 
 ### Permission System
 
-**Whitelist-Based Security:**
+**Granular Whitelist-Based Security:**
 
-- Single environment variable: `TABLE_WRITE_WHITELIST`
-- Default behavior: All tables are read-only (security-first)
-- Only explicitly whitelisted tables can execute write operations
+- **7 independent whitelists** - one per SQL operation type (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE)
+- Default behavior: All tables are read-only for each operation type (security-first)
+- Only explicitly whitelisted tables can execute specific operation types
 - Supports wildcard patterns for flexible table matching
+- Configuration format: JSON array or MCP config array
+- Security validation: Dangerous patterns (single `*`) are automatically rejected
 
-**Whitelist Format:**
+**Whitelist Format Examples:**
 
-```bash
-TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
+```json
+{
+  "TABLE_INSERT_WHITELIST": ["production.users", "*.logs"],
+  "TABLE_UPDATE_WHITELIST": ["production.users"],
+  "TABLE_DELETE_WHITELIST": ["production.temp_*"],
+  "TABLE_DDL_CREATE_WHITELIST": ["production.temp_*"],
+  "TABLE_DDL_ALTER_WHITELIST": [],
+  "TABLE_DDL_DROP_WHITELIST": [],
+  "TABLE_DDL_TRUNCATE_WHITELIST": ["production.logs"]
+}
 ```
 
 **Supported Wildcards:**
@@ -177,7 +197,7 @@ TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
 - `*.logs` - Matches any database's `logs` table
 - `production.*` - Matches all tables in `production` database
 - `dev.test_*` - Matches tables starting with `test_` in `dev` database
-- `*.*` - Matches all tables (use with caution)
+- `*` - ⚠️ **Blocked** - too dangerous, use explicit patterns instead
 
 **Transaction Safety:**
 
@@ -273,18 +293,26 @@ The server supports three MySQL connection methods:
 
 **Current Implementation:**
 
-- **Table Level**: `TABLE_WRITE_WHITELIST` with wildcard support
-  - Format: `TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*`
-  - Default: Empty whitelist = all tables are read-only
-  - Wildcards: Supports `*` for matching multiple tables
-  - Security-first: Explicit opt-in for write operations
+- **Operation-Specific Whitelists**: 7 independent whitelists with wildcard support
+  - INSERT: `TABLE_INSERT_WHITELIST`
+  - UPDATE: `TABLE_UPDATE_WHITELIST`
+  - DELETE: `TABLE_DELETE_WHITELIST`
+  - CREATE: `TABLE_DDL_CREATE_WHITELIST`
+  - ALTER: `TABLE_DDL_ALTER_WHITELIST`
+  - DROP: `TABLE_DDL_DROP_WHITELIST`
+  - TRUNCATE: `TABLE_DDL_TRUNCATE_WHITELIST`
+  - Format: JSON array or MCP config array: `["production.users", "*.logs", "dev.test_*"]`
+  - Default: Empty whitelist = all operations of that type are denied
+  - Wildcards: Supports `*` for matching multiple tables (e.g., `db.*`, `*.table`, `db.test_*`)
+  - Security-first: Explicit opt-in for each operation type
+  - Dangerous patterns blocked: Single `*` is rejected as too permissive
 
 **Permission Checking:**
 
 - Read operations (SELECT): Always allowed regardless of whitelist
-- Write operations (INSERT/UPDATE/DELETE/DDL): Only allowed for whitelisted tables
+- Write operations: Checked against operation-specific whitelist
 - Table name extraction: Uses `node-sql-parser` AST to extract full table name
-- Error messages: Clear, user-friendly errors with SQL query for manual execution
+- Error messages: Clear, user-friendly errors with operation type and whitelist name
 
 ## Common Development Tasks
 
@@ -320,8 +348,9 @@ pnpm test:socket
 
 ### Modifying Permission Logic
 
-1. Update permission functions in `src/db/permissions.ts`
+1. Update permission functions in `src/db/permissions.ts` (e.g., add new operation types)
 2. Modify table extraction if needed in `src/db/utils.ts`
-3. Test with whitelist permission scenarios
+3. Test with granular whitelist permission scenarios
 4. Update permission checking in `executeReadOnlyQuery`
 5. Update documentation in README.md and CLAUDE.md
+6. Add/update corresponding whitelist constant in `src/config/index.ts`

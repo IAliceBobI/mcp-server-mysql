@@ -69,20 +69,46 @@ function extractTableFromQuery(sql: string): string | null {
   return null;
 }
 
-// Format write denied error message
-function formatWriteDeniedError(table: string, sql: string): string {
-  return `❌ Error: Write operation not allowed
+// Format operation denied error message
+function formatOperationDeniedError(
+  operation: string,
+  table: string,
+  sql: string,
+): string {
+  const whitelistName = getWhitelistNameForOperation(operation);
+  const operationDisplay = operation.toUpperCase();
 
-Table: '${table}' is not in the write whitelist.
+  return `❌ Error: ${operationDisplay} operation not allowed
 
-🔒 This table is read-only. Only tables in TABLE_WRITE_WHITELIST can be modified.
+Table: '${table}' is not in the ${whitelistName} whitelist.
+
+🔒 This table does not have ${operationDisplay} permissions. Only tables in ${whitelistName} can be modified with ${operationDisplay} operations.
 
 📝 SQL Query:
 ${sql}
 
 💡 To execute this operation:
-1. Ask your administrator to add this table to TABLE_WRITE_WHITELIST
+1. Ask your administrator to add this table to ${whitelistName}
 2. Or execute the SQL manually in your database client`;
+}
+
+/**
+ * Get the whitelist environment variable name for an operation
+ * @param operation - Operation type (insert, update, delete, create, alter, drop, truncate)
+ * @returns Environment variable name (e.g., "TABLE_INSERT_WHITELIST")
+ */
+function getWhitelistNameForOperation(operation: string): string {
+  const whitelistMap: Record<string, string> = {
+    insert: "TABLE_INSERT_WHITELIST",
+    update: "TABLE_UPDATE_WHITELIST",
+    delete: "TABLE_DELETE_WHITELIST",
+    create: "TABLE_DDL_CREATE_WHITELIST",
+    alter: "TABLE_DDL_ALTER_WHITELIST",
+    drop: "TABLE_DDL_DROP_WHITELIST",
+    truncate: "TABLE_DDL_TRUNCATE_WHITELIST",
+  };
+
+  return whitelistMap[operation] || "WHITELIST";
 }
 
 async function getQueryTypes(query: string): Promise<string[]> {
@@ -101,4 +127,4 @@ async function getQueryTypes(query: string): Promise<string[]> {
   }
 }
 
-export { extractSchemaFromQuery, extractTableFromQuery, formatWriteDeniedError, getQueryTypes };
+export { extractSchemaFromQuery, extractTableFromQuery, formatOperationDeniedError, getQueryTypes, getWhitelistNameForOperation };

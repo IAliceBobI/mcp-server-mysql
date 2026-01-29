@@ -13,7 +13,13 @@ import { z } from "zod";
 import { log } from "./src/utils/index.js";
 import type { TableRow, ColumnRow } from "./src/types/index.js";
 import {
-  TABLE_WRITE_WHITELIST,
+  TABLE_INSERT_WHITELIST,
+  TABLE_UPDATE_WHITELIST,
+  TABLE_DELETE_WHITELIST,
+  TABLE_DDL_CREATE_WHITELIST,
+  TABLE_DDL_ALTER_WHITELIST,
+  TABLE_DDL_DROP_WHITELIST,
+  TABLE_DDL_TRUNCATE_WHITELIST,
   isMultiDbMode,
   mcpConfig as config,
   MCP_VERSION as version,
@@ -45,19 +51,25 @@ if (isMultiDbMode) {
 }
 
 // Check if any tables are whitelisted for write operations
-const hasWhitelistedTables = TABLE_WRITE_WHITELIST && TABLE_WRITE_WHITELIST.length > 0;
+const allWhitelists = [
+  TABLE_INSERT_WHITELIST,
+  TABLE_UPDATE_WHITELIST,
+  TABLE_DELETE_WHITELIST,
+  TABLE_DDL_CREATE_WHITELIST,
+  TABLE_DDL_ALTER_WHITELIST,
+  TABLE_DDL_DROP_WHITELIST,
+  TABLE_DDL_TRUNCATE_WHITELIST,
+];
+
+const totalWhitelistedPatterns = allWhitelists.reduce((sum, list) => sum + list.length, 0);
+const hasWhitelistedTables = totalWhitelistedPatterns > 0;
 
 if (hasWhitelistedTables) {
   toolDescription += " with support for WRITE operations (whitelist mode)";
-
-  if (TABLE_WRITE_WHITELIST.includes("*.*")) {
-    toolDescription += " - All tables writable";
-  } else {
-    toolDescription += ` - ${TABLE_WRITE_WHITELIST.length} table pattern(s) whitelisted`;
-  }
+  toolDescription += ` - ${totalWhitelistedPatterns} table pattern(s) whitelisted across 7 operation types`;
 } else {
   // Only read operations are allowed (default, secure)
-  toolDescription += " (READ-ONLY - whitelist empty)";
+  toolDescription += " (READ-ONLY - all whitelists empty)";
 }
 
 const isReadOnly = !hasWhitelistedTables;

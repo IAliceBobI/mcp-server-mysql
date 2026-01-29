@@ -286,9 +286,9 @@ describe("MySQL Integration", () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "Write operation not allowed",
+        "INSERT operation not allowed",
       );
-      expect(result.content[0].text).toContain("TABLE_WRITE_WHITELIST");
+      expect(result.content[0].text).toContain("TABLE_INSERT_WHITELIST");
 
       // Verify the record was not inserted
       const connection = await pool.getConnection();

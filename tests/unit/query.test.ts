@@ -125,10 +125,10 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "Write operation not allowed",
+        "INSERT operation not allowed",
       );
       expect(result.content[0].text).toContain(
-        "TABLE_WRITE_WHITELIST",
+        "TABLE_INSERT_WHITELIST",
       );
     });
 
@@ -140,7 +140,10 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "Write operation not allowed",
+        "UPDATE operation not allowed",
+      );
+      expect(result.content[0].text).toContain(
+        "TABLE_UPDATE_WHITELIST",
       );
     });
 
@@ -152,7 +155,10 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "Write operation not allowed",
+        "DELETE operation not allowed",
+      );
+      expect(result.content[0].text).toContain(
+        "TABLE_DELETE_WHITELIST",
       );
     });
   });
