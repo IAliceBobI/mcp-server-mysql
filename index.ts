@@ -16,7 +16,6 @@ import {
   TABLE_INSERT_WHITELIST,
   TABLE_UPDATE_WHITELIST,
   TABLE_DELETE_WHITELIST,
-  TABLE_DDL_CREATE_WHITELIST,
   TABLE_DDL_ALTER_WHITELIST,
   TABLE_DDL_DROP_WHITELIST,
   TABLE_DDL_TRUNCATE_WHITELIST,
@@ -55,7 +54,6 @@ const allWhitelists = [
   TABLE_INSERT_WHITELIST,
   TABLE_UPDATE_WHITELIST,
   TABLE_DELETE_WHITELIST,
-  TABLE_DDL_CREATE_WHITELIST,
   TABLE_DDL_ALTER_WHITELIST,
   TABLE_DDL_DROP_WHITELIST,
   TABLE_DDL_TRUNCATE_WHITELIST,
@@ -66,7 +64,7 @@ const hasWhitelistedTables = totalWhitelistedPatterns > 0;
 
 if (hasWhitelistedTables) {
   toolDescription += " with support for WRITE operations (whitelist mode)";
-  toolDescription += ` - ${totalWhitelistedPatterns} table pattern(s) whitelisted across 7 operation types`;
+  toolDescription += ` - ${totalWhitelistedPatterns} table pattern(s) whitelisted across 6 operation types (CREATE TABLE allowed without whitelist)`;
 } else {
   // Only read operations are allowed (default, secure)
   toolDescription += " (READ-ONLY - all whitelists empty)";

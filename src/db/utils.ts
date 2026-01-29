@@ -102,10 +102,10 @@ function getWhitelistNameForOperation(operation: string): string {
     insert: "TABLE_INSERT_WHITELIST",
     update: "TABLE_UPDATE_WHITELIST",
     delete: "TABLE_DELETE_WHITELIST",
-    create: "TABLE_DDL_CREATE_WHITELIST",
     alter: "TABLE_DDL_ALTER_WHITELIST",
     drop: "TABLE_DDL_DROP_WHITELIST",
     truncate: "TABLE_DDL_TRUNCATE_WHITELIST",
+    // Note: CREATE TABLE has no whitelist restriction
   };
 
   return whitelistMap[operation] || "WHITELIST";

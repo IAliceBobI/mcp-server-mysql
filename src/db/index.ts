@@ -195,6 +195,13 @@ async function executeReadOnlyQuery<T>(sql: string): Promise<T> {
       else if (queryTypes.includes("drop")) operationType = "drop";
       else if (queryTypes.includes("truncate")) operationType = "truncate";
 
+      // CREATE TABLE operations are allowed without whitelist restriction
+      // Users can create any table they want
+      if (operationType === "create") {
+        log("error", `CREATE TABLE operation allowed for table '${table}' (no whitelist restriction)`);
+        return executeWriteQuery(sql);
+      }
+
       // Check permission for this specific operation type
       if (operationType && !checkTablePermission(table, operationType)) {
         log(

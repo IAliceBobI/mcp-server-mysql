@@ -15,8 +15,7 @@
         "TABLE_INSERT_WHITELIST": "mcp_test.*",
         "TABLE_UPDATE_WHITELIST": "mcp_test.*",
         "TABLE_DELETE_WHITELIST": "mcp_test.*",
-        "TABLE_DDL_CREATE_WHITELIST": "mcp_test.*",
-        "TABLE_DDL_ALTER_WHITELIST": "mcp_test.abc*",
+        "TABLE_DDL_ALTER_WHITELIST": "mcp_test.abc*,mcp_test.efg*",
         "TABLE_DDL_DROP_WHITELIST": "",
         "TABLE_DDL_TRUNCATE_WHITELIST": "mcp_test.abc*"
       }

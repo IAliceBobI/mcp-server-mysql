@@ -2,7 +2,6 @@ import {
   TABLE_INSERT_WHITELIST,
   TABLE_UPDATE_WHITELIST,
   TABLE_DELETE_WHITELIST,
-  TABLE_DDL_CREATE_WHITELIST,
   TABLE_DDL_ALTER_WHITELIST,
   TABLE_DDL_DROP_WHITELIST,
   TABLE_DDL_TRUNCATE_WHITELIST,
@@ -12,6 +11,7 @@ import {
  * Get the whitelist for a specific operation type
  * @param operation - Operation type (insert, update, delete, create, alter, drop, truncate)
  * @returns Array of whitelist patterns for the operation
+ * Note: CREATE TABLE operations return empty array (no restriction)
  */
 function getWhitelistForOperation(operation: string): string[] {
   switch (operation) {
@@ -22,7 +22,8 @@ function getWhitelistForOperation(operation: string): string[] {
     case "delete":
       return TABLE_DELETE_WHITELIST;
     case "create":
-      return TABLE_DDL_CREATE_WHITELIST;
+      // CREATE TABLE is allowed without whitelist restriction
+      return [];
     case "alter":
       return TABLE_DDL_ALTER_WHITELIST;
     case "drop":
@@ -39,8 +40,14 @@ function getWhitelistForOperation(operation: string): string[] {
  * @param tableFullName - Full table name with database prefix (e.g., "production.users")
  * @param operation - Operation type (insert, update, delete, create, alter, drop, truncate)
  * @returns true if operation is allowed, false if denied
+ * Note: CREATE TABLE operations are always allowed
  */
 function checkTablePermission(tableFullName: string, operation: string): boolean {
+  // CREATE TABLE is always allowed
+  if (operation === "create") {
+    return true;
+  }
+
   const whitelist = getWhitelistForOperation(operation);
 
   // Empty whitelist = all operations denied (security-first default)

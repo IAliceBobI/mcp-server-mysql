@@ -69,9 +69,21 @@ async function setupTestDatabase() {
 
     // Create test tables
     await connection.query(`
+      -- Drop all test tables first
       DROP TABLE IF EXISTS posts;
       DROP TABLE IF EXISTS users;
       DROP TABLE IF EXISTS test_table;
+      DROP TABLE IF EXISTS whitelist_users;
+      DROP TABLE IF EXISTS whitelist_orders;
+      DROP TABLE IF EXISTS app_logs;
+      DROP TABLE IF EXISTS restricted_table;
+      DROP TABLE IF EXISTS temp_test_table;
+      DROP TABLE IF EXISTS temp_to_drop;
+      DROP TABLE IF EXISTS temp_new_table;
+      DROP TABLE IF EXISTS temp_another_table;
+      DROP TABLE IF EXISTS temp_wildcard_test;
+      DROP TABLE IF EXISTS restricted_for_alter;
+      DROP TABLE IF EXISTS restricted_new_table;
 
       CREATE TABLE users (
         id INT PRIMARY KEY AUTO_INCREMENT,

@@ -4,7 +4,12 @@ import { parseMySQLConnectionString } from "../utils/index.js";
 export const MCP_VERSION = "2.0.2";
 
 // @INFO: Load environment variables from .env file
-dotenv.config();
+// Use .env.test when NODE_ENV=test
+if (process.env.NODE_ENV === "test") {
+  dotenv.config({ path: ".env.test" });
+} else {
+  dotenv.config();
+}
 
 // @INFO: Parse connection string if provided
 // Connection string takes precedence over individual environment variables
@@ -53,10 +58,7 @@ function validateWhitelistPattern(pattern: string): boolean {
 
 /**
  * Parse whitelist environment variable
- * Supports:
- * - Array format (MCP config): ["db.table", "*.logs"]
- * - JSON string format (env vars): '["db.table", "*.logs"]'
- * - Comma-separated format: "db.table,*.logs,production.*"
+ * Supports comma-separated format: "db.table,*.logs,production.*"
  * @param envValue - Environment variable value
  * @returns Array of validated whitelist patterns
  */
@@ -71,32 +73,14 @@ function parseWhitelistEnv(envValue: any): string[] {
   if (Array.isArray(envValue)) {
     patterns = envValue;
   }
-  // Handle string format (JSON or comma-separated)
+  // Handle comma-separated string format
   else if (typeof envValue === 'string') {
     const trimmed = envValue.trim();
-
-    // Try JSON array format first
-    if (trimmed.startsWith('[')) {
-      try {
-        patterns = JSON.parse(trimmed);
-        if (!Array.isArray(patterns)) {
-          console.error(`[Whitelist] JSON must represent an array. Got: ${typeof patterns}`);
-          return [];
-        }
-      } catch (err) {
-        console.error(`[Whitelist] Invalid JSON format: ${trimmed}`);
-        console.error(`[Whitelist] Please use format: '["db.table", "*.logs"]'`);
-        return [];
-      }
-    }
-    // Fallback to comma-separated format
-    else {
-      patterns = trimmed.split(',').map(p => p.trim()).filter(p => p);
-    }
+    patterns = trimmed.split(',').map(p => p.trim()).filter(p => p);
   }
   // Invalid format
   else {
-    console.error(`[Whitelist] Configuration must be an array or JSON/CSV string. Got: ${typeof envValue}`);
+    console.error(`[Whitelist] Configuration must be an array or CSV string. Got: ${typeof envValue}`);
     return [];
   }
 
@@ -120,7 +104,7 @@ export const TABLE_UPDATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_UPDATE
 export const TABLE_DELETE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DELETE_WHITELIST);
 
 // DDL (Data Definition Language) Operations
-export const TABLE_DDL_CREATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_CREATE_WHITELIST);
+// CREATE TABLE is allowed without whitelist restriction
 export const TABLE_DDL_ALTER_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_ALTER_WHITELIST);
 export const TABLE_DDL_DROP_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_DROP_WHITELIST);
 export const TABLE_DDL_TRUNCATE_WHITELIST = parseWhitelistEnv(process.env.TABLE_DDL_TRUNCATE_WHITELIST);
