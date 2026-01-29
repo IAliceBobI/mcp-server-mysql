@@ -1,13 +1,8 @@
 import { performance } from "perf_hooks";
 import { isMultiDbMode } from "./../config/index.js";
 
-import {
-  isDDLAllowedForSchema,
-  isInsertAllowedForSchema,
-  isUpdateAllowedForSchema,
-  isDeleteAllowedForSchema,
-} from "./permissions.js";
-import { extractSchemaFromQuery, getQueryTypes } from "./utils.js";
+import { isTableInWriteWhitelist } from "./permissions.js";
+import { extractTableFromQuery, formatWriteDeniedError, getQueryTypes } from "./utils.js";
 
 import * as mysql2 from "mysql2/promise";
 import { log } from "./../utils/index.js";
@@ -75,8 +70,8 @@ async function executeWriteQuery<T>(sql: string): Promise<T> {
     connection = await pool.getConnection();
     log("error", "Write connection acquired");
 
-    // Extract schema for permissions (if needed)
-    const schema = extractSchemaFromQuery(sql);
+    // Extract table name for logging
+    const table = extractTableFromQuery(sql);
 
     // @INFO: Begin transaction for write operation
     await connection.beginTransaction();
@@ -113,15 +108,15 @@ async function executeWriteQuery<T>(sql: string): Promise<T> {
       // @INFO: Type assertion for ResultSetHeader which has affectedRows, insertId, etc.
       if (isInsertOperation) {
         const resultHeader = response as mysql2.ResultSetHeader;
-        responseText = `Insert successful on schema '${schema || "default"}'. Affected rows: ${resultHeader.affectedRows}, Last insert ID: ${resultHeader.insertId}`;
+        responseText = `Insert successful on table '${table || "unknown"}'. Affected rows: ${resultHeader.affectedRows}, Last insert ID: ${resultHeader.insertId}`;
       } else if (isUpdateOperation) {
         const resultHeader = response as mysql2.ResultSetHeader;
-        responseText = `Update successful on schema '${schema || "default"}'. Affected rows: ${resultHeader.affectedRows}, Changed rows: ${resultHeader.changedRows || 0}`;
+        responseText = `Update successful on table '${table || "unknown"}'. Affected rows: ${resultHeader.affectedRows}, Changed rows: ${resultHeader.changedRows || 0}`;
       } else if (isDeleteOperation) {
         const resultHeader = response as mysql2.ResultSetHeader;
-        responseText = `Delete successful on schema '${schema || "default"}'. Affected rows: ${resultHeader.affectedRows}`;
+        responseText = `Delete successful on table '${table || "unknown"}'. Affected rows: ${resultHeader.affectedRows}`;
       } else if (isDDLOperation) {
-        responseText = `DDL operation successful on schema '${schema || "default"}'.`;
+        responseText = `DDL operation successful on table '${table || "unknown"}'.`;
       } else {
         responseText = JSON.stringify(response, null, 2);
       }
@@ -176,99 +171,40 @@ async function executeWriteQuery<T>(sql: string): Promise<T> {
 async function executeReadOnlyQuery<T>(sql: string): Promise<T> {
   let connection;
   try {
-    // Check the type of query
+    // 1. Parse query type
     const queryTypes = await getQueryTypes(sql);
 
-    // Get schema for permission checking
-    const schema = extractSchemaFromQuery(sql);
+    // 2. Extract table name from query
+    const table = extractTableFromQuery(sql);
 
-    const isUpdateOperation = queryTypes.some((type) =>
-      ["update"].includes(type),
-    );
-    const isInsertOperation = queryTypes.some((type) =>
-      ["insert"].includes(type),
-    );
-    const isDeleteOperation = queryTypes.some((type) =>
-      ["delete"].includes(type),
-    );
-    const isDDLOperation = queryTypes.some((type) =>
-      ["create", "alter", "drop", "truncate"].includes(type),
+    // 3. Check if this is a write operation
+    const isWriteOperation = queryTypes.some((type) =>
+      ["insert", "update", "delete", "create", "alter", "drop", "truncate"].includes(type)
     );
 
-    // Check schema-specific permissions
-    if (isInsertOperation && !isInsertAllowedForSchema(schema)) {
+    // 4. Write operation not in whitelist → deny with friendly error
+    if (isWriteOperation && table && !isTableInWriteWhitelist(table)) {
       log(
         "error",
-        `INSERT operations are not allowed for schema '${schema || "default"}'. Configure SCHEMA_INSERT_PERMISSIONS.`,
+        `Write operation not allowed for table '${table}'. Table is not in TABLE_WRITE_WHITELIST.`,
       );
       return {
         content: [
           {
             type: "text",
-            text: `Error: INSERT operations are not allowed for schema '${schema || "default"}'. Ask the administrator to update SCHEMA_INSERT_PERMISSIONS.`,
+            text: formatWriteDeniedError(table, sql),
           },
         ],
         isError: true,
       } as T;
     }
 
-    if (isUpdateOperation && !isUpdateAllowedForSchema(schema)) {
-      log(
-        "error",
-        `UPDATE operations are not allowed for schema '${schema || "default"}'. Configure SCHEMA_UPDATE_PERMISSIONS.`,
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: UPDATE operations are not allowed for schema '${schema || "default"}'. Ask the administrator to update SCHEMA_UPDATE_PERMISSIONS.`,
-          },
-        ],
-        isError: true,
-      } as T;
-    }
-
-    if (isDeleteOperation && !isDeleteAllowedForSchema(schema)) {
-      log(
-        "error",
-        `DELETE operations are not allowed for schema '${schema || "default"}'. Configure SCHEMA_DELETE_PERMISSIONS.`,
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: DELETE operations are not allowed for schema '${schema || "default"}'. Ask the administrator to update SCHEMA_DELETE_PERMISSIONS.`,
-          },
-        ],
-        isError: true,
-      } as T;
-    }
-
-    if (isDDLOperation && !isDDLAllowedForSchema(schema)) {
-      log(
-        "error",
-        `DDL operations are not allowed for schema '${schema || "default"}'. Configure SCHEMA_DDL_PERMISSIONS.`,
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: DDL operations are not allowed for schema '${schema || "default"}'. Ask the administrator to update SCHEMA_DDL_PERMISSIONS.`,
-          },
-        ],
-        isError: true,
-      } as T;
-    }
-
-    // For write operations that are allowed, use executeWriteQuery
-    if (
-      (isInsertOperation && isInsertAllowedForSchema(schema)) ||
-      (isUpdateOperation && isUpdateAllowedForSchema(schema)) ||
-      (isDeleteOperation && isDeleteAllowedForSchema(schema)) ||
-      (isDDLOperation && isDDLAllowedForSchema(schema))
-    ) {
+    // 5. Whitelisted write operation → execute with write transaction
+    if (isWriteOperation && table && isTableInWriteWhitelist(table)) {
       return executeWriteQuery(sql);
     }
+
+    // 6. Read operation or table-less query → normal execution
 
     // For read-only operations, continue with the original logic
     const pool = await getPool();

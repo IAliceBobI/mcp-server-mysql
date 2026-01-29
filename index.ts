@@ -13,14 +13,7 @@ import { z } from "zod";
 import { log } from "./src/utils/index.js";
 import type { TableRow, ColumnRow } from "./src/types/index.js";
 import {
-  ALLOW_DELETE_OPERATION,
-  ALLOW_DDL_OPERATION,
-  ALLOW_INSERT_OPERATION,
-  ALLOW_UPDATE_OPERATION,
-  SCHEMA_DELETE_PERMISSIONS,
-  SCHEMA_DDL_PERMISSIONS,
-  SCHEMA_INSERT_PERMISSIONS,
-  SCHEMA_UPDATE_PERMISSIONS,
+  TABLE_WRITE_WHITELIST,
   isMultiDbMode,
   mcpConfig as config,
   MCP_VERSION as version,
@@ -43,7 +36,7 @@ import { realpathSync } from 'fs';
 
 log("info", `Starting MySQL MCP server v${version}...`);
 
-// Update tool description to include multi-DB mode and schema-specific permissions
+// Update tool description to include multi-DB mode and whitelist status
 const toolVersion = `MySQL MCP Server [v${process.env.npm_package_version}]`;
 let toolDescription = `[${toolVersion}] Run SQL queries against MySQL database`;
 
@@ -51,54 +44,23 @@ if (isMultiDbMode) {
   toolDescription += " (Multi-DB mode enabled)";
 }
 
-if (
-  ALLOW_INSERT_OPERATION ||
-  ALLOW_UPDATE_OPERATION ||
-  ALLOW_DELETE_OPERATION ||
-  ALLOW_DDL_OPERATION
-) {
-  // At least one write operation is enabled
-  toolDescription += " with support for:";
+// Check if any tables are whitelisted for write operations
+const hasWhitelistedTables = TABLE_WRITE_WHITELIST && TABLE_WRITE_WHITELIST.length > 0;
 
-  if (ALLOW_INSERT_OPERATION) {
-    toolDescription += " INSERT,";
-  }
+if (hasWhitelistedTables) {
+  toolDescription += " with support for WRITE operations (whitelist mode)";
 
-  if (ALLOW_UPDATE_OPERATION) {
-    toolDescription += " UPDATE,";
-  }
-
-  if (ALLOW_DELETE_OPERATION) {
-    toolDescription += " DELETE,";
-  }
-
-  if (ALLOW_DDL_OPERATION) {
-    toolDescription += " DDL,";
-  }
-
-  // Remove trailing comma and add READ operations
-  toolDescription = toolDescription.replace(/,$/, "") + " and READ operations";
-
-  if (
-    Object.keys(SCHEMA_INSERT_PERMISSIONS).length > 0 ||
-    Object.keys(SCHEMA_UPDATE_PERMISSIONS).length > 0 ||
-    Object.keys(SCHEMA_DELETE_PERMISSIONS).length > 0 ||
-    Object.keys(SCHEMA_DDL_PERMISSIONS).length > 0
-  ) {
-    toolDescription += " (Schema-specific permissions enabled)";
+  if (TABLE_WRITE_WHITELIST.includes("*.*")) {
+    toolDescription += " - All tables writable";
+  } else {
+    toolDescription += ` - ${TABLE_WRITE_WHITELIST.length} table pattern(s) whitelisted`;
   }
 } else {
-  // Only read operations are allowed
-  toolDescription += " (READ-ONLY)";
+  // Only read operations are allowed (default, secure)
+  toolDescription += " (READ-ONLY - whitelist empty)";
 }
 
-// Determine if we're in read-only mode (no write operations enabled)
-const isReadOnly = !(
-  ALLOW_INSERT_OPERATION ||
-  ALLOW_UPDATE_OPERATION ||
-  ALLOW_DELETE_OPERATION ||
-  ALLOW_DDL_OPERATION
-);
+const isReadOnly = !hasWhitelistedTables;
 
 // @INFO: Add debug logging for configuration
 log(

@@ -109,18 +109,15 @@ describe("Query Functions", () => {
       );
       expect(mockConnection.release).toHaveBeenCalled();
 
-      expect(result).toEqual({
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(mockResults, null, 2),
-          },
-        ],
-        isError: false,
-      });
+      expect(result.isError).toBe(false);
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe("text");
+      expect(result.content[0].text).toBe(JSON.stringify(mockResults, null, 2));
+      expect(result.content[1].type).toBe("text");
+      expect(result.content[1].text).toMatch(/Query execution time:/);
     });
 
-    it("should block INSERT operations when not allowed", async () => {
+    it("should block INSERT operations when table not in whitelist", async () => {
       const result = await executeReadOnlyQuery(
         'INSERT INTO test (name) VALUES ("test")',
       );
@@ -128,11 +125,14 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "INSERT operations are not allowed",
+        "Write operation not allowed",
+      );
+      expect(result.content[0].text).toContain(
+        "TABLE_WRITE_WHITELIST",
       );
     });
 
-    it("should block UPDATE operations when not allowed", async () => {
+    it("should block UPDATE operations when table not in whitelist", async () => {
       const result = await executeReadOnlyQuery(
         'UPDATE test SET name = "updated" WHERE id = 1',
       );
@@ -140,11 +140,11 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "UPDATE operations are not allowed",
+        "Write operation not allowed",
       );
     });
 
-    it("should block DELETE operations when not allowed", async () => {
+    it("should block DELETE operations when table not in whitelist", async () => {
       const result = await executeReadOnlyQuery(
         "DELETE FROM test WHERE id = 1",
       );
@@ -152,7 +152,7 @@ describe("Query Functions", () => {
       expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain(
-        "DELETE operations are not allowed",
+        "Write operation not allowed",
       );
     });
   });

@@ -1,5 +1,61 @@
 # Changelog
 
+## [2.1.0] - 2026-01-29
+
+### Breaking Changes
+
+- **Permission System Overhaul**: Simplified from three-tier (global → schema → table) to single whitelist mode
+  - Removed: `ALLOW_INSERT_OPERATION`, `ALLOW_UPDATE_OPERATION`, `ALLOW_DELETE_OPERATION`, `ALLOW_DDL_OPERATION` global flags
+  - Removed: `SCHEMA_INSERT_PERMISSIONS`, `SCHEMA_UPDATE_PERMISSIONS`, `SCHEMA_DELETE_PERMISSIONS`, `SCHEMA_DDL_PERMISSIONS` schema-specific permissions
+  - Added: `TABLE_WRITE_WHITELIST` with wildcard support for table-level write permissions
+  - **Default behavior changed**: All tables are now read-only by default (security-first)
+  - **Migration required**: Users must update configuration to use `TABLE_WRITE_WHITELIST` for write operations
+
+### Added
+
+- **Table Whitelist Permissions**: New whitelist-based permission system
+  - `TABLE_WRITE_WHITELIST` environment variable with comma-separated table patterns
+  - Wildcard support: `*.logs`, `production.*`, `dev.test_*`, `*.*`
+  - `extractTableFromQuery()` function to extract full table names from SQL queries
+  - `formatWriteDeniedError()` function for user-friendly error messages
+  - `matchWildcard()` function for pattern matching
+  - `isTableInWriteWhitelist()` function for permission checking
+
+### Changed
+
+- **Permission checking**: Now checks table-level whitelist instead of global/schema flags
+- **Error messages**: Improved error messages show table name, SQL query, and clear instructions
+- **Security**: Default read-only mode is safer for production use
+- **Simplicity**: Single environment variable instead of 8 separate permission configs
+
+### Migration Guide
+
+**Old configuration:**
+```bash
+ALLOW_INSERT_OPERATION=true
+ALLOW_UPDATE_OPERATION=true
+SCHEMA_INSERT_PERMISSIONS=development:true,testing:true
+```
+
+**New configuration:**
+```bash
+# One line replaces all old permission configs
+TABLE_WRITE_WHITELIST=development.*,testing.*
+```
+
+See [docs/plans/2026-01-29-table-whitelist-permissions-design.md](./docs/plans/2026-01-29-table-whitelist-permissions-design.md) for complete details.
+
+### Added Tests
+
+- `tests/unit/whitelist.test.ts` - Unit tests for wildcard matching and permission checks
+- `tests/integration/whitelist.test.ts` - Integration tests for whitelist functionality
+
+### Documentation
+
+- Updated README.md with new whitelist configuration examples
+- Updated CLAUDE.md with new permission system architecture
+- Added design document with migration guide
+
 ## Planned Features
 
 - Query Features

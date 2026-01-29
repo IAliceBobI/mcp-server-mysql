@@ -92,8 +92,7 @@ pnpm lint
 - Key exports:
   - `mcpConfig` - MySQL connection configuration
   - `isMultiDbMode` - Boolean indicating multi-database mode
-  - `ALLOW_*_OPERATION` - Global write permission flags
-  - `SCHEMA_*_PERMISSIONS` - Schema-specific permission maps
+  - `TABLE_WRITE_WHITELIST` - Table whitelist for write operations with wildcard support
   - `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS` - Control transaction mode
 
 **Database Layer (`src/db/index.ts`)**
@@ -108,17 +107,17 @@ pnpm lint
 
 **Permissions (`src/db/permissions.ts`)**
 
-- Schema-specific permission checking functions:
-  - `isInsertAllowedForSchema(schema)`
-  - `isUpdateAllowedForSchema(schema)`
-  - `isDeleteAllowedForSchema(schema)`
-  - `isDDLAllowedForSchema(schema)`
-- Falls back to global permissions if no schema-specific rule exists
+- Whitelist-based permission checking functions:
+  - `isTableInWriteWhitelist(tableFullName)` - Checks if a table is in the write whitelist
+  - `matchWildcard(table, pattern)` - Matches table names against wildcard patterns
+- Default behavior: All tables are read-only unless explicitly whitelisted
+- Supports wildcard patterns: `*.logs`, `production.*`, `dev.test_*`
 
 **SQL Parsing (`src/db/utils.ts`)**
 
 - `getQueryTypes()` - Parses SQL using `node-sql-parser` to identify operation types
-- `extractSchemaFromQuery()` - Extracts database schema from qualified table names or `USE` statements
+- `extractTableFromQuery()` - Extracts full table name (with database prefix) from SQL queries
+- `formatWriteDeniedError()` - Formats user-friendly error messages for write operation denials
 
 **General Utilities (`src/utils/index.ts`)**
 
@@ -160,18 +159,30 @@ When `MYSQL_DB` environment variable is empty or unset:
 
 ### Permission System
 
-**Two-Level Hierarchy:**
+**Whitelist-Based Security:**
 
-1. Global flags: `ALLOW_INSERT_OPERATION`, `ALLOW_UPDATE_OPERATION`, `ALLOW_DELETE_OPERATION`, `ALLOW_DDL_OPERATION`
-2. Schema-specific overrides: `SCHEMA_*_PERMISSIONS` environment variables
+- Single environment variable: `TABLE_WRITE_WHITELIST`
+- Default behavior: All tables are read-only (security-first)
+- Only explicitly whitelisted tables can execute write operations
+- Supports wildcard patterns for flexible table matching
 
-**Format:** `SCHEMA_INSERT_PERMISSIONS=development:true,test:true,production:false`
+**Whitelist Format:**
+```bash
+TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
+```
+
+**Supported Wildcards:**
+- `*.logs` - Matches any database's `logs` table
+- `production.*` - Matches all tables in `production` database
+- `dev.test_*` - Matches tables starting with `test_` in `dev` database
+- `*.*` - Matches all tables (use with caution)
 
 **Transaction Safety:**
 
 - Read operations use `SET SESSION TRANSACTION READ ONLY` by default
 - Can be disabled with `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS=true` for DDL support
 - Write operations use explicit transactions with commit/rollback
+- Write operations denied for tables not in whitelist with clear error messages
 
 ### Remote MCP Mode
 
@@ -185,14 +196,15 @@ When `IS_REMOTE_MCP=true` and `REMOTE_SECRET_KEY` is set:
 
 ### Query Execution Flow
 
-1. Tool call received → `CallToolRequestSchema` handler in `index.ts:284`
-2. Calls `executeReadOnlyQuery(sql)` in `src/db/index.ts:176`
+1. Tool call received → `CallToolRequestSchema` handler in `index.ts`
+2. Calls `executeReadOnlyQuery(sql)` in `src/db/index.ts`
 3. Parse query type via `getQueryTypes()` using `node-sql-parser`
-4. Extract schema via `extractSchemaFromQuery()` for permission checking
-5. Check permissions (`isInsertAllowedForSchema`, etc.) in `src/db/permissions.ts`
-6. If write allowed → `executeWriteQuery()` with explicit transaction
-7. If read-only → Set `TRANSACTION READ ONLY`, execute query, rollback
-8. Return formatted result with execution time
+4. Extract full table name via `extractTableFromQuery()` for permission checking
+5. Check if write operation (INSERT/UPDATE/DELETE/DDL)
+6. If write operation and table not whitelisted → Return friendly error with SQL
+7. If write operation and table whitelisted → `executeWriteQuery()` with explicit transaction
+8. If read operation → Set `TRANSACTION READ ONLY`, execute query, rollback
+9. Return formatted result with execution time
 
 ## Project Structure
 
@@ -259,11 +271,18 @@ The server supports three MySQL connection methods:
 
 **Current Implementation:**
 
-- **Global Level**: `ALLOW_INSERT_OPERATION`, `ALLOW_UPDATE_OPERATION`, etc.
-- **Schema (Database) Level**: `SCHEMA_INSERT_PERMISSIONS`, `SCHEMA_UPDATE_PERMISSIONS`, etc.
-  - Format: `SCHEMA_INSERT_PERMISSIONS=development:true,test:true,production:false`
+- **Table Level**: `TABLE_WRITE_WHITELIST` with wildcard support
+  - Format: `TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*`
+  - Default: Empty whitelist = all tables are read-only
+  - Wildcards: Supports `*` for matching multiple tables
+  - Security-first: Explicit opt-in for write operations
 
-**Table-level permissions are NOT supported**. Permission checking in `src/db/permissions.ts` only accepts `schema` parameter, not table names.
+**Permission Checking:**
+
+- Read operations (SELECT): Always allowed regardless of whitelist
+- Write operations (INSERT/UPDATE/DELETE/DDL): Only allowed for whitelisted tables
+- Table name extraction: Uses `node-sql-parser` AST to extract full table name
+- Error messages: Clear, user-friendly errors with SQL query for manual execution
 
 ## Common Development Tasks
 
@@ -300,6 +319,7 @@ pnpm test:socket
 ### Modifying Permission Logic
 
 1. Update permission functions in `src/db/permissions.ts`
-2. Modify schema extraction if needed in `src/db/utils.ts`
-3. Test with schema-specific permission scenarios
+2. Modify table extraction if needed in `src/db/utils.ts`
+3. Test with whitelist permission scenarios
 4. Update permission checking in `executeReadOnlyQuery`
+5. Update documentation in README.md and CLAUDE.md

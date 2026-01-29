@@ -36,7 +36,7 @@ A Model Context Protocol server that provides access to MySQL databases through 
 - [Configuration](#configuration)
 - [Environment Variables](#environment-variables)
 - [Multi-DB Mode](#multi-db-mode)
-- [Schema-Specific Permissions](#schema-specific-permissions)
+- [Table Whitelist Permissions](#table-whitelist-permissions)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -75,9 +75,7 @@ codex mcp add mcp_server_mysql \
   --env MYSQL_USER="root" \
   --env MYSQL_PASS="your_password" \
   --env MYSQL_DB="your_database" \
-  --env ALLOW_INSERT_OPERATION="false" \
-  --env ALLOW_UPDATE_OPERATION="false" \
-  --env ALLOW_DELETE_OPERATION="false" \
+  --env TABLE_WRITE_WHITELIST="" \
   -- npx -y @benborla29/mcp-server-mysql
 ```
 
@@ -116,9 +114,7 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e ALLOW_INSERT_OPERATION="false" \
-  -e ALLOW_UPDATE_OPERATION="false" \
-  -e ALLOW_DELETE_OPERATION="false" \
+  -e TABLE_WRITE_WHITELIST="" \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -133,9 +129,7 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e ALLOW_INSERT_OPERATION="false" \
-  -e ALLOW_UPDATE_OPERATION="false" \
-  -e ALLOW_DELETE_OPERATION="false" \
+  -e TABLE_WRITE_WHITELIST="" \
   -e PATH="/path/to/node/bin:/usr/bin:/bin" \
   -e NODE_PATH="/path/to/node/lib/node_modules" \
   -- /path/to/node /full/path/to/mcp-server-mysql/dist/index.js
@@ -157,9 +151,7 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e ALLOW_INSERT_OPERATION="false" \
-  -e ALLOW_UPDATE_OPERATION="false" \
-  -e ALLOW_DELETE_OPERATION="false" \
+  -e TABLE_WRITE_WHITELIST="" \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -225,9 +217,7 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_CACHE_TTL="60000" \
   -e MYSQL_RATE_LIMIT="100" \
   -e MYSQL_SSL="true" \
-  -e ALLOW_INSERT_OPERATION="false" \
-  -e ALLOW_UPDATE_OPERATION="false" \
-  -e ALLOW_DELETE_OPERATION="false" \
+  -e TABLE_WRITE_WHITELIST="" \
   -e MYSQL_ENABLE_LOGGING="true" \
   -- npx @benborla29/mcp-server-mysql
 ```
@@ -317,9 +307,7 @@ If you want to clone and run this MCP server directly from the source code, foll
            "MYSQL_USER": "root",
            "MYSQL_PASS": "your_password",
            "MYSQL_DB": "your_database",
-           "ALLOW_INSERT_OPERATION": "false",
-           "ALLOW_UPDATE_OPERATION": "false",
-           "ALLOW_DELETE_OPERATION": "false",
+           "TABLE_WRITE_WHITELIST": "",
            "PATH": "/path/to/node/bin:/usr/bin:/bin", // <--- Important to add the following, run in your terminal `echo "$(which node)/../"` to get the path
            "NODE_PATH": "/path/to/node/lib/node_modules" // <--- Important to add the following, run in your terminal `echo "$(which node)/../../lib/node_modules"`
          }
@@ -457,11 +445,10 @@ When reconfiguring, you can update any of the MySQL connection details as well a
   - SSL/TLS configuration (if your database requires secure connections)
 
 - **Write operation permissions**:
-  - Allow INSERT Operations: Set to true if you want to allow adding new data
-  - Allow UPDATE Operations: Set to true if you want to allow updating existing data
-  - Allow DELETE Operations: Set to true if you want to allow deleting data
-
-For security reasons, all write operations are disabled by default. Only enable these settings if you specifically need Claude to modify your database data.
+  - Use `TABLE_WRITE_WHITELIST` to specify which tables can be modified
+  - Supports wildcard patterns (e.g., `production.users,*.logs,dev.test_*`)
+  - Empty whitelist = all tables are read-only (safe default)
+  - Only enable write operations for tables you specifically need Claude to modify
 
 ### Advanced Configuration Options
 
@@ -500,10 +487,8 @@ For more control over the MCP server's behavior, you can use these advanced conf
         "MYSQL_LOG_LEVEL": "info",
         "MYSQL_METRICS_ENABLED": "true",
 
-        // Write operation flags
-        "ALLOW_INSERT_OPERATION": "false",
-        "ALLOW_UPDATE_OPERATION": "false",
-        "ALLOW_DELETE_OPERATION": "false"
+        // Write permissions - whitelist mode
+        "TABLE_WRITE_WHITELIST": ""
       }
     }
   }
@@ -548,15 +533,8 @@ When `MYSQL_CONNECTION_STRING` is provided, it takes precedence over individual 
 - `MYSQL_RATE_LIMIT`: Maximum queries per minute (default: "100")
 - `MYSQL_MAX_QUERY_COMPLEXITY`: Maximum query complexity score (default: "1000")
 - `MYSQL_SSL`: Enable SSL/TLS encryption (default: "false")
-- `ALLOW_INSERT_OPERATION`: Enable INSERT operations (default: "false")
-- `ALLOW_UPDATE_OPERATION`: Enable UPDATE operations (default: "false")
-- `ALLOW_DELETE_OPERATION`: Enable DELETE operations (default: "false")
-- `ALLOW_DDL_OPERATION`: Enable DDL operations (default: "false")
-- `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS`: **[NEW]** Disable read-only transaction enforcement (default: "false") ⚠️ **Security Warning:** Only enable this if you need full write capabilities and trust the LLM with your database
-- `SCHEMA_INSERT_PERMISSIONS`: Schema-specific INSERT permissions
-- `SCHEMA_UPDATE_PERMISSIONS`: Schema-specific UPDATE permissions
-- `SCHEMA_DELETE_PERMISSIONS`: Schema-specific DELETE permissions
-- `SCHEMA_DDL_PERMISSIONS`: Schema-specific DDL permissions
+- `TABLE_WRITE_WHITELIST`: Comma-separated list of tables that allow write operations with wildcard support (default: "") - See [Table Whitelist Permissions](#table-whitelist-permissions) for details
+- `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS`: Disable read-only transaction enforcement (default: "false") ⚠️ **Security Warning:** Only enable this if you need full write capabilities and trust the LLM with your database
 - `MULTI_DB_WRITE_MODE`: Enable write operations in multi-DB mode (default: "false")
 
 ### Timezone and Date Configuration
@@ -596,20 +574,111 @@ USE database_name;
 SELECT * FROM table_name;
 ```
 
-## Schema-Specific Permissions
+## Table Whitelist Permissions
 
-For fine-grained control over database operations, MCP-Server-MySQL now supports schema-specific permissions. This allows different databases to have different levels of access (read-only, read-write, etc.).
+MCP-Server-MySQL uses a whitelist-based permission system for write operations. All tables are **read-only by default** for security. Only explicitly whitelisted tables can be modified.
 
-### Configuration Example
+### Configuration
 
-```txt
-SCHEMA_INSERT_PERMISSIONS=development:true,test:true,production:false
-SCHEMA_UPDATE_PERMISSIONS=development:true,test:true,production:false
-SCHEMA_DELETE_PERMISSIONS=development:false,test:true,production:false
-SCHEMA_DDL_PERMISSIONS=development:false,test:true,production:false
+Set the `TABLE_WRITE_WHITELIST` environment variable with comma-separated table patterns:
+
+```bash
+# Allow writes to specific tables
+TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
+
+# Allow writes to all tables in a database
+TABLE_WRITE_WHITELIST=production.*
+
+# Allow writes to all tables (use with caution)
+TABLE_WRITE_WHITELIST=*.*
+
+# Empty or unset = all tables are read-only (safe default)
+TABLE_WRITE_WHITELIST=
 ```
 
-For complete details and security recommendations, see [README-MULTI-DB.md](./README-MULTI-DB.md).
+### Wildcard Patterns
+
+The whitelist supports simple `*` wildcard patterns:
+
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `production.users` | `production.users` only | `dev.users` |
+| `*.logs` | `dev.logs`, `prod.logs` | `dev.log_table` |
+| `production.*` | All tables in `production` database | Tables in other databases |
+| `dev.test_*` | `dev.test_1`, `dev.test_temp` | `dev.prod_1` |
+| `*.*` | All tables | None |
+
+### Permission Matrix
+
+| Operation | Whitelisted Tables | Non-Whitelisted Tables |
+|-----------|-------------------|----------------------|
+| SELECT (read) | ✅ Allowed | ✅ Allowed |
+| INSERT (write) | ✅ Allowed | ❌ Denied |
+| UPDATE (write) | ✅ Allowed | ❌ Denied |
+| DELETE (write) | ✅ Allowed | ❌ Denied |
+| DDL (CREATE/ALTER/DROP) | ✅ Allowed | ❌ Denied |
+
+### Example Configurations
+
+**Claude Code with whitelist:**
+```bash
+claude mcp add mcp_server_mysql \
+  -e MYSQL_HOST="127.0.0.1" \
+  -e MYSQL_PORT="3306" \
+  -e MYSQL_USER="root" \
+  -e MYSQL_PASS="your_password" \
+  -e MYSQL_DB="production" \
+  -e TABLE_WRITE_WHITELIST="production.users,production.temp_*" \
+  -- npx @benborla29/mcp-server-mysql
+```
+
+**Claude Desktop configuration:**
+```json
+{
+  "mcpServers": {
+    "mcp_server_mysql": {
+      "command": "/path/to/node",
+      "args": ["/full/path/to/mcp-server-mysql/dist/index.js"],
+      "env": {
+        "MYSQL_HOST": "127.0.0.1",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "root",
+        "MYSQL_PASS": "your_password",
+        "MYSQL_DB": "production",
+        "TABLE_WRITE_WHITELIST": "production.users,production.temp_*"
+      }
+    }
+  }
+}
+```
+
+### Error Messages
+
+When AI attempts to write to a non-whitelisted table, it receives a clear error message with:
+
+- ❌ Error notification
+- Table name that was denied
+- The SQL query that was blocked
+- Instructions for how to proceed (ask admin or execute manually)
+
+### Migration from Old System
+
+If you were using the old `ALLOW_*_OPERATION` or `SCHEMA_*_PERMISSIONS` system:
+
+**Old configuration:**
+```bash
+ALLOW_INSERT_OPERATION=true
+ALLOW_UPDATE_OPERATION=true
+SCHEMA_INSERT_PERMISSIONS=development:true,testing:true
+```
+
+**New configuration:**
+```bash
+# One line replaces all old permission configs
+TABLE_WRITE_WHITELIST=development.*,testing.*
+```
+
+For complete details, see [docs/plans/2026-01-29-table-whitelist-permissions-design.md](./docs/plans/2026-01-29-table-whitelist-permissions-design.md).
 
 ## Testing
 

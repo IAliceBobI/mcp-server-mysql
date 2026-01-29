@@ -33,6 +33,42 @@ function extractSchemaFromQuery(sql: string): string | null {
   return defaultSchema;
 }
 
+// Extract full table name (with database prefix) from SQL query
+function extractTableFromQuery(sql: string): string | null {
+  try {
+    const ast = parser.astify(sql, { database: "mysql" }) as any;
+    const statements = Array.isArray(ast) ? ast : [ast];
+    const firstStmt = statements[0];
+
+    // Try to get table reference from various AST locations
+    // AST structure varies by query type (SELECT, INSERT, UPDATE, DELETE, etc.)
+    const tableRef = firstStmt?.table?.[0] || firstStmt?.from?.[0];
+    if (tableRef) {
+      const db = tableRef.db || process.env.MYSQL_DB || "default";
+      return `${db}.${tableRef.table}`;
+    }
+  } catch (err) {
+    log("error", "Failed to extract table from SQL:", err);
+  }
+  return null;
+}
+
+// Format write denied error message
+function formatWriteDeniedError(table: string, sql: string): string {
+  return `❌ Error: Write operation not allowed
+
+Table: '${table}' is not in the write whitelist.
+
+🔒 This table is read-only. Only tables in TABLE_WRITE_WHITELIST can be modified.
+
+📝 SQL Query:
+${sql}
+
+💡 To execute this operation:
+1. Ask your administrator to add this table to TABLE_WRITE_WHITELIST
+2. Or execute the SQL manually in your database client`;
+}
+
 async function getQueryTypes(query: string): Promise<string[]> {
   try {
     log("info", "Parsing SQL query: ", query);
@@ -49,4 +85,4 @@ async function getQueryTypes(query: string): Promise<string[]> {
   }
 }
 
-export { extractSchemaFromQuery, getQueryTypes };
+export { extractSchemaFromQuery, extractTableFromQuery, formatWriteDeniedError, getQueryTypes };

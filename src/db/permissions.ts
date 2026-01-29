@@ -1,54 +1,38 @@
-import {
-  ALLOW_DELETE_OPERATION,
-  ALLOW_DDL_OPERATION,
-  ALLOW_INSERT_OPERATION,
-  ALLOW_UPDATE_OPERATION,
-  SCHEMA_DELETE_PERMISSIONS,
-  SCHEMA_DDL_PERMISSIONS,
-  SCHEMA_INSERT_PERMISSIONS,
-  SCHEMA_UPDATE_PERMISSIONS,
-} from "../config/index.js";
+import { TABLE_WRITE_WHITELIST } from "../config/index.js";
 
-// Schema permission checking functions
-function isInsertAllowedForSchema(schema: string | null): boolean {
-  if (!schema) {
-    return ALLOW_INSERT_OPERATION;
+/**
+ * Check if a table is in the write whitelist
+ * @param tableFullName Full table name with database prefix (e.g., "production.users")
+ * @returns true if table can be modified, false if read-only
+ */
+function isTableInWriteWhitelist(tableFullName: string): boolean {
+  // Empty whitelist = all tables are read-only (security-first default)
+  if (!TABLE_WRITE_WHITELIST || TABLE_WRITE_WHITELIST.length === 0) {
+    return false;
   }
-  return schema in SCHEMA_INSERT_PERMISSIONS
-    ? SCHEMA_INSERT_PERMISSIONS[schema]
-    : ALLOW_INSERT_OPERATION;
+
+  return TABLE_WRITE_WHITELIST.some((pattern) =>
+    matchWildcard(tableFullName, pattern)
+  );
 }
 
-function isUpdateAllowedForSchema(schema: string | null): boolean {
-  if (!schema) {
-    return ALLOW_UPDATE_OPERATION;
-  }
-  return schema in SCHEMA_UPDATE_PERMISSIONS
-    ? SCHEMA_UPDATE_PERMISSIONS[schema]
-    : ALLOW_UPDATE_OPERATION;
+/**
+ * Match table name against wildcard pattern
+ * Supports simple * wildcard matching zero or more arbitrary characters
+ * @param table Full table name (e.g., "production.users")
+ * @param pattern Wildcard pattern (e.g., "*.logs", "production.*", "dev.test_*")
+ * @returns true if table matches pattern
+ */
+function matchWildcard(table: string, pattern: string): boolean {
+  // Convert wildcard pattern to regex
+  // *.logs → /^.*\.logs$/
+  // production.* → /^production\..*$/
+  // dev.test_* → /^dev\.test_.*$/
+  const regex = pattern
+    .replace(/\./g, "\\.")  // Escape literal dots
+    .replace(/\*/g, ".*");   // Convert * to .*
+
+  return new RegExp(`^${regex}$`).test(table);
 }
 
-function isDeleteAllowedForSchema(schema: string | null): boolean {
-  if (!schema) {
-    return ALLOW_DELETE_OPERATION;
-  }
-  return schema in SCHEMA_DELETE_PERMISSIONS
-    ? SCHEMA_DELETE_PERMISSIONS[schema]
-    : ALLOW_DELETE_OPERATION;
-}
-
-function isDDLAllowedForSchema(schema: string | null): boolean {
-  if (!schema) {
-    return ALLOW_DDL_OPERATION;
-  }
-  return schema in SCHEMA_DDL_PERMISSIONS
-    ? SCHEMA_DDL_PERMISSIONS[schema]
-    : ALLOW_DDL_OPERATION;
-}
-
-export {
-  isInsertAllowedForSchema,
-  isUpdateAllowedForSchema,
-  isDeleteAllowedForSchema,
-  isDDLAllowedForSchema,
-};
+export { isTableInWriteWhitelist, matchWildcard };

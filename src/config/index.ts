@@ -1,6 +1,5 @@
 import * as dotenv from "dotenv";
-import { SchemaPermissions } from "../types/index.js";
-import { parseSchemaPermissions, parseMySQLConnectionString } from "../utils/index.js";
+import { parseMySQLConnectionString } from "../utils/index.js";
 
 export const MCP_VERSION = "2.0.2";
 
@@ -18,29 +17,17 @@ if (process.env.NODE_ENV === "test" && !process.env.MYSQL_DB) {
   process.env.MYSQL_DB = "mcp_test_db"; // @INFO: Ensure we have a database name for tests
 }
 
-// Write operation flags (global defaults)
-export const ALLOW_INSERT_OPERATION =
-  process.env.ALLOW_INSERT_OPERATION === "true";
-export const ALLOW_UPDATE_OPERATION =
-  process.env.ALLOW_UPDATE_OPERATION === "true";
-export const ALLOW_DELETE_OPERATION =
-  process.env.ALLOW_DELETE_OPERATION === "true";
-export const ALLOW_DDL_OPERATION = process.env.ALLOW_DDL_OPERATION === "true";
+// Table write whitelist configuration
+// Supports comma-separated patterns with wildcards, e.g., "production.users,*.logs,dev.test_*"
+// Empty or unset = all tables are read-only (security-first default)
+const whitelistEnv = process.env.TABLE_WRITE_WHITELIST || "";
+export const TABLE_WRITE_WHITELIST = whitelistEnv
+  ? whitelistEnv.split(",").map((s) => s.trim()).filter(Boolean)
+  : [];
 
 // Transaction mode control
-export const MYSQL_DISABLE_READ_ONLY_TRANSACTIONS = 
+export const MYSQL_DISABLE_READ_ONLY_TRANSACTIONS =
   process.env.MYSQL_DISABLE_READ_ONLY_TRANSACTIONS === "true";
-
-// Schema-specific permissions
-export const SCHEMA_INSERT_PERMISSIONS: SchemaPermissions =
-  parseSchemaPermissions(process.env.SCHEMA_INSERT_PERMISSIONS);
-export const SCHEMA_UPDATE_PERMISSIONS: SchemaPermissions =
-  parseSchemaPermissions(process.env.SCHEMA_UPDATE_PERMISSIONS);
-export const SCHEMA_DELETE_PERMISSIONS: SchemaPermissions =
-  parseSchemaPermissions(process.env.SCHEMA_DELETE_PERMISSIONS);
-export const SCHEMA_DDL_PERMISSIONS: SchemaPermissions = parseSchemaPermissions(
-  process.env.SCHEMA_DDL_PERMISSIONS,
-);
 
 // Remote MCP configuration
 export const IS_REMOTE_MCP = process.env.IS_REMOTE_MCP === "true";
