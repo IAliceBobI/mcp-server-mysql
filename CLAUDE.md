@@ -115,10 +115,22 @@ pnpm lint
   - `isDDLAllowedForSchema(schema)`
 - Falls back to global permissions if no schema-specific rule exists
 
-**Utilities (`src/db/utils.ts`)**
+**SQL Parsing (`src/db/utils.ts`)**
 
-- `getQueryTypes()` - Parses SQL to identify operation types (SELECT, INSERT, etc.)
-- `extractSchemaFromQuery()` - Extracts database schema from qualified table names or USE statements
+- `getQueryTypes()` - Parses SQL using `node-sql-parser` to identify operation types
+- `extractSchemaFromQuery()` - Extracts database schema from qualified table names or `USE` statements
+
+**General Utilities (`src/utils/index.ts`)**
+
+- `log()` - Conditional logging based on `ENABLE_LOGGING` environment variable
+- `parseSchemaPermissions()` - Parses schema permission strings (`db1:true,db2:false`)
+- `parseMySQLConnectionString()` - Parses MySQL CLI-format connection strings (e.g., `mysql -hHOST -uUSER -pPASS db`)
+
+**Types (`src/types/index.ts`)**
+
+- `SchemaPermissions` - Record mapping schema names to boolean permissions
+- `TableRow` - Table metadata from information_schema
+- `ColumnRow` - Column metadata for resources
 
 ### MCP Protocol Implementation
 
@@ -133,7 +145,9 @@ pnpm lint
 - `mysql_query` - Single tool that executes SQL queries
 - Input: `{ sql: string }`
 - Output: JSON result set with execution time
-- Enforces permissions based on query type and target schema
+- Permission enforcement happens in `executeReadOnlyQuery` before query execution
+- Read queries use `SET SESSION TRANSACTION READ ONLY` unless disabled
+- Write queries (INSERT/UPDATE/DELETE/DDL) use explicit transactions with commit/rollback
 
 ### Multi-Database Mode
 
@@ -167,6 +181,18 @@ When `IS_REMOTE_MCP=true` and `REMOTE_SECRET_KEY` is set:
 - Accepts POST requests to `/mcp` endpoint
 - Requires `Authorization: Bearer <REMOTE_SECRET_KEY>` header
 - Uses StreamableHTTPServerTransport instead of stdio
+- Stateless mode: creates new server/transport instance per request
+
+### Query Execution Flow
+
+1. Tool call received → `CallToolRequestSchema` handler in `index.ts:284`
+2. Calls `executeReadOnlyQuery(sql)` in `src/db/index.ts:176`
+3. Parse query type via `getQueryTypes()` using `node-sql-parser`
+4. Extract schema via `extractSchemaFromQuery()` for permission checking
+5. Check permissions (`isInsertAllowedForSchema`, etc.) in `src/db/permissions.ts`
+6. If write allowed → `executeWriteQuery()` with explicit transaction
+7. If read-only → Set `TRANSACTION READ ONLY`, execute query, rollback
+8. Return formatted result with execution time
 
 ## Project Structure
 
@@ -191,14 +217,17 @@ When `IS_REMOTE_MCP=true` and `REMOTE_SECRET_KEY` is set:
 └── dist/                      # Compiled JavaScript output
 ```
 
-## Important Development Notes
+## Important Architecture Notes
 
 ### Connection Methods
 
-The server supports two MySQL connection methods:
+The server supports three MySQL connection methods:
 
 1. **TCP/IP**: Set `MYSQL_HOST` and `MYSQL_PORT`
 2. **Unix Socket**: Set `MYSQL_SOCKET_PATH` (takes precedence over TCP/IP)
+3. **Connection String**: Set `MYSQL_CONNECTION_STRING` with MySQL CLI format (e.g., `mysql -hHOST -P3306 -uUSER -pPASS database_name`)
+   - Takes precedence over individual connection variables
+   - Useful for rotating credentials or temporary connections
 
 ### Testing Strategy
 
@@ -207,7 +236,7 @@ The server supports two MySQL connection methods:
 - Use `.env.test` for test-specific configuration
 - Integration tests cover multi-DB mode, schema permissions, and socket connections
 
-### ES Module Configuration
+### ES Module Quirks
 
 - Uses `"type": "module"` in package.json
 - All imports must include `.js` extension (TypeScript quirk for ES modules)
@@ -224,8 +253,35 @@ The server supports two MySQL connection methods:
 - Connection pooling with configurable limit (default 10)
 - Query execution timing tracked via `performance.now()`
 - Lazy pool initialization on first query
+- Configurable connection timeout, queue limit, and SSL/TLS support
+
+## Permission Control Granularity
+
+**Current Implementation:**
+
+- **Global Level**: `ALLOW_INSERT_OPERATION`, `ALLOW_UPDATE_OPERATION`, etc.
+- **Schema (Database) Level**: `SCHEMA_INSERT_PERMISSIONS`, `SCHEMA_UPDATE_PERMISSIONS`, etc.
+  - Format: `SCHEMA_INSERT_PERMISSIONS=development:true,test:true,production:false`
+
+**Table-level permissions are NOT supported**. Permission checking in `src/db/permissions.ts` only accepts `schema` parameter, not table names.
 
 ## Common Development Tasks
+
+### Running a Single Test Suite
+
+```bash
+# Unit tests only (no MySQL required)
+pnpm test:unit
+
+# Integration tests (MySQL required)
+pnpm test:integration
+
+# E2e tests (MySQL required)
+pnpm test:e2e
+
+# Socket connection tests
+pnpm test:socket
+```
 
 ### Adding New Query Types
 
