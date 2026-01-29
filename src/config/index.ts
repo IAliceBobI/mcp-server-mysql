@@ -56,6 +56,7 @@ function validateWhitelistPattern(pattern: string): boolean {
  * Supports:
  * - Array format (MCP config): ["db.table", "*.logs"]
  * - JSON string format (env vars): '["db.table", "*.logs"]'
+ * - Comma-separated format: "db.table,*.logs,production.*"
  * @param envValue - Environment variable value
  * @returns Array of validated whitelist patterns
  */
@@ -70,23 +71,32 @@ function parseWhitelistEnv(envValue: any): string[] {
   if (Array.isArray(envValue)) {
     patterns = envValue;
   }
-  // Handle JSON string format (environment variables)
+  // Handle string format (JSON or comma-separated)
   else if (typeof envValue === 'string') {
-    try {
-      patterns = JSON.parse(envValue);
-      if (!Array.isArray(patterns)) {
-        console.error(`[Whitelist] JSON must represent an array. Got: ${typeof patterns}`);
+    const trimmed = envValue.trim();
+
+    // Try JSON array format first
+    if (trimmed.startsWith('[')) {
+      try {
+        patterns = JSON.parse(trimmed);
+        if (!Array.isArray(patterns)) {
+          console.error(`[Whitelist] JSON must represent an array. Got: ${typeof patterns}`);
+          return [];
+        }
+      } catch (err) {
+        console.error(`[Whitelist] Invalid JSON format: ${trimmed}`);
+        console.error(`[Whitelist] Please use format: '["db.table", "*.logs"]'`);
         return [];
       }
-    } catch (err) {
-      console.error(`[Whitelist] Invalid JSON format: ${envValue}`);
-      console.error(`[Whitelist] Please use format: '["db.table", "*.logs"]'`);
-      return [];
+    }
+    // Fallback to comma-separated format
+    else {
+      patterns = trimmed.split(',').map(p => p.trim()).filter(p => p);
     }
   }
   // Invalid format
   else {
-    console.error(`[Whitelist] Configuration must be an array or JSON string. Got: ${typeof envValue}`);
+    console.error(`[Whitelist] Configuration must be an array or JSON/CSV string. Got: ${typeof envValue}`);
     return [];
   }
 
