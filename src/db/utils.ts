@@ -42,10 +42,26 @@ function extractTableFromQuery(sql: string): string | null {
 
     // Try to get table reference from various AST locations
     // AST structure varies by query type (SELECT, INSERT, UPDATE, DELETE, etc.)
-    const tableRef = firstStmt?.table?.[0] || firstStmt?.from?.[0];
+    let tableRef = firstStmt?.table?.[0] || firstStmt?.from?.[0];
+
+    // For DROP, ALTER, TRUNCATE operations, table might be in 'name' field
+    if (!tableRef && firstStmt?.name) {
+      tableRef = firstStmt.name;
+    }
+
+    // Also check direct 'table' field for some DDL operations
+    if (!tableRef && firstStmt?.table) {
+      tableRef = firstStmt.table;
+    }
+
     if (tableRef) {
-      const db = tableRef.db || process.env.MYSQL_DB || "default";
-      return `${db}.${tableRef.table}`;
+      // Handle both object and array formats
+      const tableObj = Array.isArray(tableRef) ? tableRef[0] : tableRef;
+      const db = tableObj?.db || process.env.MYSQL_DB || "default";
+      const tableName = tableObj?.table;
+      if (tableName) {
+        return `${db}.${tableName}`;
+      }
     }
   } catch (err) {
     log("error", "Failed to extract table from SQL:", err);

@@ -182,25 +182,35 @@ async function executeReadOnlyQuery<T>(sql: string): Promise<T> {
       ["insert", "update", "delete", "create", "alter", "drop", "truncate"].includes(type)
     );
 
-    // 4. Write operation not in whitelist → deny with friendly error
-    if (isWriteOperation && table && !isTableInWriteWhitelist(table)) {
-      log(
-        "error",
-        `Write operation not allowed for table '${table}'. Table is not in TABLE_WRITE_WHITELIST.`,
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: formatWriteDeniedError(table, sql),
-          },
-        ],
-        isError: true,
-      } as T;
-    }
+    // 3.1 Check if this is a CREATE TABLE operation
+    const isCreateTable = queryTypes.some((type) => type === "create");
 
-    // 5. Whitelisted write operation → execute with write transaction
-    if (isWriteOperation && table && isTableInWriteWhitelist(table)) {
+    // 4. Handle write operations
+    if (isWriteOperation && table) {
+      // CREATE TABLE is always allowed
+      if (isCreateTable) {
+        log("info", `CREATE TABLE operation allowed for table '${table}' (whitelist bypassed)`);
+        return executeWriteQuery(sql);
+      }
+
+      // Other write operations require whitelist
+      if (!isTableInWriteWhitelist(table)) {
+        log(
+          "error",
+          `Write operation not allowed for table '${table}'. Table is not in TABLE_WRITE_WHITELIST.`,
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: formatWriteDeniedError(table, sql),
+            },
+          ],
+          isError: true,
+        } as T;
+      }
+
+      // Whitelisted write operation
       return executeWriteQuery(sql);
     }
 

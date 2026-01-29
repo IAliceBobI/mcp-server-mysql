@@ -80,6 +80,76 @@ describe("Table Whitelist", () => {
     });
   });
 
+  describe("Table Name Extraction", () => {
+    it("Extracts table name from INSERT query", () => {
+      const sql = "INSERT INTO production.users (name) VALUES ('test')";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("production.users");
+    });
+
+    it("Extracts table name from UPDATE query", () => {
+      const sql = "UPDATE dev.users SET name='test' WHERE id=1";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("dev.users");
+    });
+
+    it("Extracts table name from DELETE query", () => {
+      const sql = "DELETE FROM production.orders WHERE id=1";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("production.orders");
+    });
+
+    it("Extracts table name from SELECT query", () => {
+      const sql = "SELECT * FROM test.products WHERE price > 100";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("test.products");
+    });
+
+    it("Extracts table name from CREATE TABLE query", () => {
+      const sql = "CREATE TABLE production.new_users (id INT PRIMARY KEY)";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("production.new_users");
+    });
+
+    it("Extracts table name from CREATE TABLE with IF NOT EXISTS", () => {
+      const sql = "CREATE TABLE IF NOT EXISTS dev.temp_table (id INT)";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("dev.temp_table");
+    });
+
+    it("Extracts table name from ALTER TABLE query", () => {
+      const sql = "ALTER TABLE test.users ADD COLUMN age INT";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("test.users");
+    });
+
+    it("Extracts table name from DROP TABLE query", () => {
+      const sql = "DROP TABLE production.old_table";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("production.old_table");
+    });
+
+    it("Handles queries with explicit database prefix", () => {
+      const sql = "SELECT * FROM mydb.mytable";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("mydb.mytable");
+    });
+
+    it("Returns null for queries without table", () => {
+      const sql = "SELECT 1";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBeNull();
+    });
+
+    it("Uses default database when no prefix", () => {
+      process.env.MYSQL_DB = "default_db";
+      const sql = "SELECT * FROM users";
+      const table = extractTableFromQuery(sql);
+      expect(table).toBe("default_db.users");
+      delete process.env.MYSQL_DB;
+    });
+  });
+
   describe("Whitelist Permission Integration", () => {
     it("Tests whitelist pattern matching directly", () => {
       // Test with whitelist array

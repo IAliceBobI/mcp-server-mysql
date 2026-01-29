@@ -296,4 +296,167 @@ describe("Whitelist Integration", () => {
       expect(errorText).toContain("execute the SQL manually");
     });
   });
+
+  describe("CREATE TABLE operations bypass whitelist", () => {
+    it("should allow CREATE TABLE for table NOT in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "CREATE TABLE mcp_test.new_created_table (id INT PRIMARY KEY, data VARCHAR(255))"
+      );
+
+      expect(result.isError).toBe(false);
+
+      // Verify the table was actually created
+      const connection = await pool.getConnection();
+      try {
+        const [rows] = await connection.query("SHOW TABLES LIKE 'new_created_table'");
+        expect(rows.length).toBeGreaterThan(0);
+
+        // Clean up
+        await connection.query("DROP TABLE mcp_test.new_created_table");
+      } finally {
+        connection.release();
+      }
+    });
+
+    it("should allow CREATE TABLE with IF NOT EXISTS for table NOT in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "CREATE TABLE IF NOT EXISTS mcp_test.another_new_table (id INT, name TEXT)"
+      );
+
+      expect(result.isError).toBe(false);
+
+      // Verify the table was created
+      const connection = await pool.getConnection();
+      try {
+        const [rows] = await connection.query("SHOW TABLES LIKE 'another_new_table'");
+        expect(rows.length).toBeGreaterThan(0);
+
+        // Clean up
+        await connection.query("DROP TABLE IF EXISTS mcp_test.another_new_table");
+      } finally {
+        connection.release();
+      }
+    });
+
+    it("should allow CREATE TABLE for table in whitelist as well", async () => {
+      const result = await executeReadOnlyQuery(
+        "CREATE TABLE mcp_test.whitelist_new_table (id INT PRIMARY KEY)"
+      );
+
+      expect(result.isError).toBe(false);
+
+      // Verify the table was created
+      const connection = await pool.getConnection();
+      try {
+        const [rows] = await connection.query("SHOW TABLES LIKE 'whitelist_new_table'");
+        expect(rows.length).toBeGreaterThan(0);
+
+        // Clean up
+        await connection.query("DROP TABLE IF EXISTS mcp_test.whitelist_new_table");
+      } finally {
+        connection.release();
+      }
+    });
+  });
+
+  describe("Other DDL operations require whitelist", () => {
+    beforeEach(async () => {
+      // Create a table to test ALTER and DROP
+      const connection = await pool.getConnection();
+      try {
+        await connection.query(
+          "CREATE TABLE IF NOT EXISTS mcp_test.restricted_for_alter (id INT PRIMARY KEY)"
+        );
+      } finally {
+        connection.release();
+      }
+    });
+
+    it("should deny ALTER TABLE for table NOT in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "ALTER TABLE mcp_test.restricted_for_alter ADD COLUMN data VARCHAR(255)"
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("mcp_test.restricted_for_alter");
+    });
+
+    it("should deny DROP TABLE for table NOT in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "DROP TABLE mcp_test.restricted_for_alter"
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Write operation not allowed");
+    });
+
+    it("should allow ALTER TABLE for table in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "ALTER TABLE mcp_test.whitelist_users ADD COLUMN age INT"
+      );
+
+      expect(result.isError).toBe(false);
+
+      // Verify the column was added
+      const connection = await pool.getConnection();
+      try {
+        const [columns] = await connection.query(
+          "SHOW COLUMNS FROM mcp_test.whitelist_users LIKE 'age'"
+        );
+        expect(columns.length).toBeGreaterThan(0);
+
+        // Clean up - remove the added column
+        await connection.query("ALTER TABLE mcp_test.whitelist_users DROP COLUMN age");
+      } finally {
+        connection.release();
+      }
+    });
+  });
+
+  describe("TRUNCATE operations require whitelist", () => {
+    beforeEach(async () => {
+      // Insert test data
+      const connection = await pool.getConnection();
+      try {
+        await connection.query(
+          "INSERT INTO restricted_table (data) VALUES ('Data 1'), ('Data 2')"
+        );
+      } finally {
+        connection.release();
+      }
+    });
+
+    it("should deny TRUNCATE for table NOT in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "TRUNCATE TABLE mcp_test.restricted_table"
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Write operation not allowed");
+    });
+
+    it("should allow TRUNCATE for table in whitelist", async () => {
+      // First insert data
+      await executeReadOnlyQuery(
+        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('User 1'), ('User 2')"
+      );
+
+      // Then truncate
+      const result = await executeReadOnlyQuery(
+        "TRUNCATE TABLE mcp_test.whitelist_users"
+      );
+
+      expect(result.isError).toBe(false);
+
+      // Verify the table was truncated
+      const connection = await pool.getConnection();
+      try {
+        const [rows] = await connection.query("SELECT * FROM whitelist_users");
+        expect(rows).toHaveLength(0);
+      } finally {
+        connection.release();
+      }
+    });
+  });
 });
