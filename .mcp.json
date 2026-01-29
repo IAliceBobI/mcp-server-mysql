@@ -11,8 +11,14 @@
         "MYSQL_USER": "root",
         "MYSQL_PASS": "",
         "MYSQL_DB": "mcp_test",
-        "TABLE_WRITE_WHITELIST": "mcp_test.whitelist_users",
-        "MYSQL_ENABLE_LOGGING": "true"
+        "ENABLE_LOGGING": "true",
+        "TABLE_INSERT_WHITELIST": ["mcp_test.*"],
+        "TABLE_UPDATE_WHITELIST": ["mcp_test.*"],
+        "TABLE_DELETE_WHITELIST": ["mcp_test.*"],
+        "TABLE_DDL_CREATE_WHITELIST": ["mcp_test.*"],
+        "TABLE_DDL_ALTER_WHITELIST": ["mcp_test.abc*"],
+        "TABLE_DDL_DROP_WHITELIST": [],
+        "TABLE_DDL_TRUNCATE_WHITELIST": ["mcp_test.abc*"]
       }
     }
   }

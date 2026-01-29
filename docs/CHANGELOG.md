@@ -31,6 +31,7 @@
 ### Migration Guide
 
 **Old configuration:**
+
 ```bash
 ALLOW_INSERT_OPERATION=true
 ALLOW_UPDATE_OPERATION=true
@@ -38,6 +39,7 @@ SCHEMA_INSERT_PERMISSIONS=development:true,testing:true
 ```
 
 **New configuration:**
+
 ```bash
 # One line replaces all old permission configs
 TABLE_WRITE_WHITELIST=development.*,testing.*

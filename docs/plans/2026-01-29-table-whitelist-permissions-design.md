@@ -47,6 +47,7 @@ TABLE_WRITE_WHITELIST=*.*
 ## Permission Logic
 
 **Whitelisted tables:**
+
 - ✅ SELECT (read)
 - ✅ INSERT (write)
 - ✅ UPDATE (write)
@@ -54,6 +55,7 @@ TABLE_WRITE_WHITELIST=*.*
 - ✅ DDL (CREATE, ALTER, DROP, TRUNCATE)
 
 **Non-whitelisted tables:**
+
 - ✅ SELECT (read)
 - ❌ INSERT (write)
 - ❌ UPDATE (write)
@@ -290,6 +292,7 @@ describe('Whitelist Integration', () => {
 ### Migration Example
 
 **Old configuration (complex):**
+
 ```bash
 ALLOW_INSERT_OPERATION=true
 ALLOW_UPDATE_OPERATION=true
@@ -300,6 +303,7 @@ SCHEMA_DELETE_PERMISSIONS=testing:true
 ```
 
 **New configuration (simplified):**
+
 ```bash
 # One line to rule them all
 TABLE_WRITE_WHITELIST=development.*,testing.*
@@ -326,14 +330,17 @@ TABLE_WRITE_WHITELIST=*.*
 ```
 
 **Wildcard patterns:**
+
 - `*.logs` → Matches any database's `logs` table
 - `production.*` → Matches all tables in `production` database
 - `dev.test_*` → Matches tables starting with `test_` in `dev` database
 
 **Removed configurations:**
+
 - `ALLOW_INSERT_OPERATION`, `ALLOW_UPDATE_OPERATION`, `ALLOW_DELETE_OPERATION`, `ALLOW_DDL_OPERATION`
 - `SCHEMA_INSERT_PERMISSIONS`, `SCHEMA_UPDATE_PERMISSIONS`, `SCHEMA_DELETE_PERMISSIONS`, `SCHEMA_DDL_PERMISSIONS`
-```
+
+```text
 
 ### Changelog
 

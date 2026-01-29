@@ -167,11 +167,13 @@ When `MYSQL_DB` environment variable is empty or unset:
 - Supports wildcard patterns for flexible table matching
 
 **Whitelist Format:**
+
 ```bash
 TABLE_WRITE_WHITELIST=production.users,*.logs,dev.test_*
 ```
 
 **Supported Wildcards:**
+
 - `*.logs` - Matches any database's `logs` table
 - `production.*` - Matches all tables in `production` database
 - `dev.test_*` - Matches tables starting with `test_` in `dev` database

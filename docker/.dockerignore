@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+npm-debug.log
+pnpm-lock.yaml
+
+# Build output
+dist
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# Documentation (except LICENSE)
+README.md
+CHANGELOG.md
+CLAUDE.md
+docs/
+
+# Tests
+tests
+*.test.ts
+coverage
+.nyc_output
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Misc
+.DS_Store
+*.log
+
+# MCP config (local only)
+.mcp.json

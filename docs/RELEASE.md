@@ -7,7 +7,7 @@
 #### Multi-DB Support
 
 - Added support for managing multiple databases through a single MCP server instance
-- Detailed documentation available in `README-MULTI-DB.md`
+- Detailed documentation available in [docs/README-MULTI-DB.md](README-MULTI-DB.md)
 - Special thanks to [@saarthak-gupta-architect](https://github.com/saarthak-gupta-architect) for this contribution
 - Features include:
   - Dynamic database switching
@@ -51,7 +51,7 @@
 
 2. Review any case-sensitive database operations in your queries
 3. Update any scripts that parse server output to handle the new logging format
-4. Check `README-MULTI-DB.md` for multi-database setup instructions if needed
+4. Check [README-MULTI-DB.md](README-MULTI-DB.md) for multi-database setup instructions if needed
 
 ### Contributors 👥
 

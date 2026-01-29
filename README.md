@@ -19,7 +19,7 @@
 
 ### Quick Start for Claude Code Users
 
-1. **Read the Setup Guide**: See [PROJECT_SETUP_GUIDE.md](PROJECT_SETUP_GUIDE.md) for detailed instructions
+1. **Read the Setup Guide**: See [docs/PROJECT_SETUP_GUIDE.md](docs/PROJECT_SETUP_GUIDE.md) for detailed instructions
 2. **Configure SSH Tunnels**: Set up automatic SSH tunnels for remote databases
 3. **Use with Claude**: Integrated MCP server works seamlessly with Claude Code
 
@@ -218,7 +218,7 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_RATE_LIMIT="100" \
   -e MYSQL_SSL="true" \
   -e TABLE_WRITE_WHITELIST="" \
-  -e MYSQL_ENABLE_LOGGING="true" \
+  -e ENABLE_LOGGING="true" \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -547,7 +547,7 @@ When `MYSQL_CONNECTION_STRING` is provided, it takes precedence over individual 
 
 ### Monitoring Configuration
 
-- `MYSQL_ENABLE_LOGGING`: Enable query logging (default: "false")
+- `ENABLE_LOGGING`: Enable query logging (default: "false")
 - `MYSQL_LOG_LEVEL`: Logging level (default: "info")
 - `MYSQL_METRICS_ENABLED`: Enable performance metrics (default: "false")
 
@@ -559,7 +559,7 @@ When `MYSQL_CONNECTION_STRING` is provided, it takes precedence over individual 
 
 ## Multi-DB Mode
 
-MCP-Server-MySQL supports connecting to multiple databases when no specific database is set. This allows the LLM to query any database the MySQL user has access to. For full details, see [README-MULTI-DB.md](./README-MULTI-DB.md).
+MCP-Server-MySQL supports connecting to multiple databases when no specific database is set. This allows the LLM to query any database the MySQL user has access to. For full details, see [docs/README-MULTI-DB.md](./docs/README-MULTI-DB.md).
 
 ### Enabling Multi-DB Mode
 
@@ -621,6 +621,7 @@ The whitelist supports simple `*` wildcard patterns:
 ### Example Configurations
 
 **Claude Code with whitelist:**
+
 ```bash
 claude mcp add mcp_server_mysql \
   -e MYSQL_HOST="127.0.0.1" \
@@ -633,6 +634,7 @@ claude mcp add mcp_server_mysql \
 ```
 
 **Claude Desktop configuration:**
+
 ```json
 {
   "mcpServers": {
@@ -666,6 +668,7 @@ When AI attempts to write to a non-whitelisted table, it receives a clear error 
 If you were using the old `ALLOW_*_OPERATION` or `SCHEMA_*_PERMISSIONS` system:
 
 **Old configuration:**
+
 ```bash
 ALLOW_INSERT_OPERATION=true
 ALLOW_UPDATE_OPERATION=true
@@ -673,6 +676,7 @@ SCHEMA_INSERT_PERMISSIONS=development:true,testing:true
 ```
 
 **New configuration:**
+
 ```bash
 # One line replaces all old permission configs
 TABLE_WRITE_WHITELIST=development.*,testing.*
@@ -878,7 +882,7 @@ Contributions are welcome! Please feel free to submit a Pull Request to
 
 ### Project Roadmap
 
-We're actively working on enhancing this MCP server. Check our [CHANGELOG.md](./CHANGELOG.md) for details on planned features, including:
+We're actively working on enhancing this MCP server. Check our [docs/CHANGELOG.md](./docs/CHANGELOG.md) for details on planned features, including:
 
 - Enhanced query capabilities with prepared statements
 - Advanced security features
