@@ -99,6 +99,39 @@ describe("Whitelist Integration", () => {
     // Clear all tables before each test
     const connection = await pool.getConnection();
     try {
+      // Ensure tables exist (in case they were dropped by previous tests)
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS whitelist_users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS whitelist_orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          total DECIMAL(10, 2) DEFAULT 0.00,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS app_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          message TEXT,
+          level VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS restricted_table (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          data VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Truncate all tables
       await connection.query("TRUNCATE TABLE whitelist_users");
       await connection.query("TRUNCATE TABLE whitelist_orders");
       await connection.query("TRUNCATE TABLE app_logs");
@@ -162,18 +195,11 @@ describe("Whitelist Integration", () => {
 
   describe("UPDATE operations with whitelist", () => {
     beforeEach(async () => {
-      // Insert test data
-      const connection = await pool.getConnection();
-      try {
-        await connection.query(
-          "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
-        );
-        await connection.query(
-          "INSERT INTO restricted_table (data) VALUES ('Data 1'), ('Data 2')"
-        );
-      } finally {
-        connection.release();
-      }
+      // Insert test data using executeReadOnlyQuery
+      const insertResult = await executeReadOnlyQuery(
+        "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
+      );
+      expect(insertResult.isError).toBe(false);
     });
 
     it("should allow UPDATE on whitelisted table", async () => {
@@ -189,6 +215,7 @@ describe("Whitelist Integration", () => {
         const [rows] = await connection.query(
           "SELECT * FROM whitelist_users WHERE id = 1"
         );
+        expect(rows.length).toBeGreaterThan(0);
         expect(rows[0].name).toBe("Updated User");
       } finally {
         connection.release();
@@ -208,18 +235,11 @@ describe("Whitelist Integration", () => {
 
   describe("DELETE operations with whitelist", () => {
     beforeEach(async () => {
-      // Insert test data
-      const connection = await pool.getConnection();
-      try {
-        await connection.query(
-          "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
-        );
-        await connection.query(
-          "INSERT INTO restricted_table (data) VALUES ('Data 1'), ('Data 2')"
-        );
-      } finally {
-        connection.release();
-      }
+      // Insert test data using executeReadOnlyQuery
+      const insertResult = await executeReadOnlyQuery(
+        "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
+      );
+      expect(insertResult.isError).toBe(false);
     });
 
     it("should allow DELETE on whitelisted table", async () => {
@@ -297,8 +317,8 @@ describe("Whitelist Integration", () => {
     });
   });
 
-  describe("CREATE TABLE operations require whitelist", () => {
-    it("should allow CREATE TABLE for table matching CREATE whitelist pattern", async () => {
+  describe("CREATE TABLE operations are allowed without whitelist", () => {
+    it("should allow CREATE TABLE for any table name", async () => {
       const result = await executeReadOnlyQuery(
         "CREATE TABLE mcp_test.temp_created_table (id INT PRIMARY KEY, data VARCHAR(255))"
       );
@@ -318,17 +338,7 @@ describe("Whitelist Integration", () => {
       }
     });
 
-    it("should deny CREATE TABLE for table NOT in CREATE whitelist", async () => {
-      const result = await executeReadOnlyQuery(
-        "CREATE TABLE mcp_test.restricted_table (id INT PRIMARY KEY)"
-      );
-
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("CREATE operation not allowed");
-      expect(result.content[0].text).toContain("TABLE_DDL_CREATE_WHITELIST");
-    });
-
-    it("should allow CREATE TABLE with IF NOT EXISTS for table in whitelist", async () => {
+    it("should allow CREATE TABLE with IF NOT EXISTS", async () => {
       const result = await executeReadOnlyQuery(
         "CREATE TABLE IF NOT EXISTS mcp_test.temp_another_table (id INT, name TEXT)"
       );

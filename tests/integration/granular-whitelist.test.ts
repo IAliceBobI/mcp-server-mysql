@@ -100,6 +100,45 @@ describe("Granular Whitelist Integration", () => {
   beforeEach(async () => {
     const connection = await pool.getConnection();
     try {
+      // Ensure tables exist (in case they were dropped by previous tests)
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS whitelist_users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS whitelist_orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          total DECIMAL(10, 2) DEFAULT 0.00,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS app_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          message TEXT,
+          level VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS restricted_table (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          data VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS temp_test_table (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          data VARCHAR(255)
+        )
+      `);
+
+      // Truncate all tables
       await connection.query("TRUNCATE TABLE whitelist_users");
       await connection.query("TRUNCATE TABLE whitelist_orders");
       await connection.query("TRUNCATE TABLE app_logs");
@@ -227,8 +266,8 @@ describe("Granular Whitelist Integration", () => {
     });
   });
 
-  describe("CREATE TABLE operations with TABLE_DDL_CREATE_WHITELIST", () => {
-    it("should allow CREATE TABLE for table matching CREATE whitelist pattern", async () => {
+  describe("CREATE TABLE operations are allowed without whitelist", () => {
+    it("should allow CREATE TABLE for any table name", async () => {
       const result = await executeReadOnlyQuery(
         "CREATE TABLE mcp_test.temp_new_table (id INT PRIMARY KEY, data VARCHAR(255))"
       );
@@ -243,16 +282,6 @@ describe("Granular Whitelist Integration", () => {
       } finally {
         connection.release();
       }
-    });
-
-    it("should deny CREATE TABLE for table NOT matching CREATE whitelist", async () => {
-      const result = await executeReadOnlyQuery(
-        "CREATE TABLE mcp_test.restricted_new_table (id INT PRIMARY KEY)"
-      );
-
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("CREATE operation not allowed");
-      expect(result.content[0].text).toContain("TABLE_DDL_CREATE_WHITELIST");
     });
   });
 

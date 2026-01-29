@@ -1,20 +1,75 @@
-# MCP Server for MySQL - Claude Code Edition
+# MCP Server for MySQL - Enhanced Permission Edition
 
-> **🚀 This is a modified version optimized for Claude Code with SSH tunnel support**  
-> **Original Author:** [@benborla29](https://github.com/benborla)  
-> **Original Repository:** [https://github.com/benborla/mcp-server-mysql](https://github.com/benborla/mcp-server-mysql)  
-> **License:** MIT  
+> **🔐 Enhanced with granular whitelist-based permission control for maximum security and flexibility**
+> **Original Author:** [@benborla29](https://github.com/benborla)
+> **Original Repository:** [https://github.com/benborla/mcp-server-mysql](https://github.com/benborla/mcp-server-mysql)
+> **License:** MIT
+
+**🌐 Language / 语言:** [English](README.md) | [简体中文](README_CN.md)
 
 ## MCP Server for MySQL based on NodeJS
 
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/benborla/mcp-server-mysql)](https://archestra.ai/mcp-catalog/benborla__mcp-server-mysql)
 
-### Key Features of This Fork
+### 🎯 What's Different from Upstream
+
+This fork adds **granular operation-level permission control** on top of the original mcp-server-mysql, giving you fine-grained security without sacrificing flexibility:
+
+#### ✨ **Granular Whitelist Permission System** (Major Enhancement)
+
+- **7 Independent Operation Whitelists** - Separate control for INSERT, UPDATE, DELETE, ALTER, DROP, TRUNCATE
+- **CREATE TABLE Without Whitelist** - Allow table creation freely for development workflows
+- **Wildcard Pattern Support** - Use patterns like `*.logs`, `production.*`, `dev.test_*` for flexible table matching
+- **Security-First Design** - All operations are read-only by default unless explicitly whitelisted
+- **Flexible Configuration** - Support both JSON array and comma-separated formats
+
+**Configuration Format (Breaking Change):**
+
+⚠️ **Important:** This version uses **comma-separated strings** instead of JSON arrays. This is a breaking change from the upstream version.
+
+```bash
+# ❌ OLD FORMAT (upstream) - NO LONGER SUPPORTED
+TABLE_INSERT_WHITELIST='["db.table", "*.logs"]'
+
+# ✅ NEW FORMAT (this fork) - comma-separated strings
+TABLE_INSERT_WHITELIST="db.table,*.logs"
+```
+
+**Example Configuration:**
+```bash
+# Allow INSERT into production.users and any *.logs table
+TABLE_INSERT_WHITELIST="production.users,*.logs"
+
+# Allow UPDATE only in production.users
+TABLE_UPDATE_WHITELIST="production.users"
+
+# Allow DELETE only from temp tables
+TABLE_DELETE_WHITELIST="*.temp_*"
+
+# No DDL operations allowed (empty by default)
+TABLE_DDL_ALTER_WHITELIST=""
+TABLE_DDL_DROP_WHITELIST=""
+TABLE_DDL_TRUNCATE_WHITELIST=""
+```
+
+**Breaking Changes from Upstream:**
+- ⚠️ **Configuration format changed** from JSON arrays to comma-separated strings
+- ⚠️ **7 separate whitelists** instead of a single whitelist
+- ✅ **CREATE TABLE no longer requires whitelist** (removed from upstream)
+- ✅ **Granular control** - allow INSERT but block UPDATE/DELETE independently
+
+**Benefits over Upstream:**
+- ✅ **More flexible** than single whitelist - you can allow INSERT but block UPDATE/DELETE
+- ✅ **More secure** than all-or-nothing - each operation type needs explicit opt-in
+- ✅ **Better for development** - CREATE TABLE works without whitelist restrictions
+- ✅ **Wildcard support** - manage permissions across multiple tables efficiently
+- ✅ **Simpler configuration** - comma-separated strings instead of JSON arrays
+
+#### Additional Features
 
 - ✅ **Claude Code Integration** - Optimized for use with Anthropic's Claude Code CLI
 - ✅ **SSH Tunnel Support** - Built-in support for SSH tunnels to remote databases
 - ✅ **Auto-start/stop Hooks** - Automatic tunnel management with Claude start/stop
-- ✅ **DDL Operations** - Added `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS` for CREATE TABLE support
 - ✅ **Multi-Project Setup** - Easy configuration for multiple projects with different databases
 
 ### Quick Start for Claude Code Users
@@ -24,6 +79,68 @@
 3. **Use with Claude**: Integrated MCP server works seamlessly with Claude Code
 
 A Model Context Protocol server that provides access to MySQL databases through SSH tunnels. This server enables Claude and other LLMs to inspect database schemas and execute SQL queries securely.
+
+### 📋 Practical Configuration Examples
+
+#### Example 1: Read-Only Mode (Default - Most Secure)
+```bash
+# All whitelists empty - only SELECT queries allowed
+TABLE_INSERT_WHITELIST=""
+TABLE_UPDATE_WHITELIST=""
+TABLE_DELETE_WHITELIST=""
+TABLE_DDL_ALTER_WHITELIST=""
+TABLE_DDL_DROP_WHITELIST=""
+TABLE_DDL_TRUNCATE_WHITELIST=""
+```
+
+#### Example 2: Development Environment (CREATE + INSERT)
+```bash
+# Allow creating tables and inserting data
+# But prevent accidental updates/deletes/drops
+TABLE_INSERT_WHITELIST="dev.*"           # Can INSERT into any dev table
+TABLE_UPDATE_WHITELIST=""                # No UPDATE allowed
+TABLE_DELETE_WHITELIST=""                # No DELETE allowed
+TABLE_DDL_ALTER_WHITELIST=""            # No ALTER allowed
+TABLE_DDL_DROP_WHITELIST=""             # No DROP allowed
+TABLE_DDL_TRUNCATE_WHITELIST=""         # No TRUNCATE allowed
+# CREATE TABLE is always allowed without whitelist!
+```
+
+#### Example 3: Production Logging Table (INSERT + TRUNCATE)
+```bash
+# Allow inserting logs and periodic cleanup
+# But prevent modifying or dropping the table
+TABLE_INSERT_WHITELIST="production.logs"        # INSERT into logs table
+TABLE_UPDATE_WHITELIST=""                       # No UPDATE
+TABLE_DELETE_WHITELIST=""                       # No DELETE
+TABLE_DDL_ALTER_WHITELIST=""                   # No ALTER
+TABLE_DDL_DROP_WHITELIST=""                    # No DROP
+TABLE_DDL_TRUNCATE_WHITELIST="production.logs" # Can TRUNCATE logs
+```
+
+#### Example 4: Staging Environment (Full DML, Limited DDL)
+```bash
+# Allow all data operations but limit schema changes
+TABLE_INSERT_WHITELIST="staging.*"
+TABLE_UPDATE_WHITELIST="staging.*"
+TABLE_DELETE_WHITELIST="staging.temp_*"      # Only DELETE from temp tables
+TABLE_DDL_ALTER_WHITELIST=""                 # No ALTER
+TABLE_DDL_DROP_WHITELIST="staging.temp_*"    # Can DROP temp tables
+TABLE_DDL_TRUNCATE_WHITELIST="staging.logs"  # Can TRUNCATE logs
+```
+
+#### Example 5: Using Comma-Separated Format (Simpler)
+```bash
+# Alternative format: comma-separated strings
+TABLE_INSERT_WHITELIST='production.users,*.logs,dev.test_*'
+TABLE_UPDATE_WHITELIST='production.users'
+TABLE_DELETE_WHITELIST='*.temp_*'
+TABLE_DDL_ALTER_WHITELIST=''
+TABLE_DDL_DROP_WHITELIST=''
+TABLE_DDL_TRUNCATE_WHITELIST='production.logs'
+```
+
+**Key Advantage:** Each operation type is controlled independently. You can allow INSERT while blocking UPDATE, or allow TRUNCATE for logs while blocking DROP. This granularity is not available in the upstream version!
 
 ## Table of Contents
 
@@ -75,7 +192,7 @@ codex mcp add mcp_server_mysql \
   --env MYSQL_USER="root" \
   --env MYSQL_PASS="your_password" \
   --env MYSQL_DB="your_database" \
-  --env TABLE_INSERT_WHITELIST='[]' \
+  --env TABLE_INSERT_WHITELIST="" \
   -- npx -y @benborla29/mcp-server-mysql
 ```
 
@@ -114,13 +231,12 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_INSERT_WHITELIST='[]' \
-  -e TABLE_UPDATE_WHITELIST='[]' \
-  -e TABLE_DELETE_WHITELIST='[]' \
-  -e TABLE_DDL_CREATE_WHITELIST='[]' \
-  -e TABLE_DDL_ALTER_WHITELIST='[]' \
-  -e TABLE_DDL_DROP_WHITELIST='[]' \
-  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
+  -e TABLE_INSERT_WHITELIST="" \
+  -e TABLE_UPDATE_WHITELIST="" \
+  -e TABLE_DELETE_WHITELIST="" \
+  -e TABLE_DDL_ALTER_WHITELIST="" \
+  -e TABLE_DDL_DROP_WHITELIST="" \
+  -e TABLE_DDL_TRUNCATE_WHITELIST="" \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -135,13 +251,12 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_INSERT_WHITELIST='[]' \
-  -e TABLE_UPDATE_WHITELIST='[]' \
-  -e TABLE_DELETE_WHITELIST='[]' \
-  -e TABLE_DDL_CREATE_WHITELIST='[]' \
-  -e TABLE_DDL_ALTER_WHITELIST='[]' \
-  -e TABLE_DDL_DROP_WHITELIST='[]' \
-  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
+  -e TABLE_INSERT_WHITELIST="" \
+  -e TABLE_UPDATE_WHITELIST="" \
+  -e TABLE_DELETE_WHITELIST="" \
+  -e TABLE_DDL_ALTER_WHITELIST="" \
+  -e TABLE_DDL_DROP_WHITELIST="" \
+  -e TABLE_DDL_TRUNCATE_WHITELIST="" \
   -e PATH="/path/to/node/bin:/usr/bin:/bin" \
   -e NODE_PATH="/path/to/node/lib/node_modules" \
   -- /path/to/node /full/path/to/mcp-server-mysql/dist/index.js
@@ -163,13 +278,12 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_USER="root" \
   -e MYSQL_PASS="your_password" \
   -e MYSQL_DB="your_database" \
-  -e TABLE_INSERT_WHITELIST='[]' \
-  -e TABLE_UPDATE_WHITELIST='[]' \
-  -e TABLE_DELETE_WHITELIST='[]' \
-  -e TABLE_DDL_CREATE_WHITELIST='[]' \
-  -e TABLE_DDL_ALTER_WHITELIST='[]' \
-  -e TABLE_DDL_DROP_WHITELIST='[]' \
-  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
+  -e TABLE_INSERT_WHITELIST="" \
+  -e TABLE_UPDATE_WHITELIST="" \
+  -e TABLE_DELETE_WHITELIST="" \
+  -e TABLE_DDL_ALTER_WHITELIST="" \
+  -e TABLE_DDL_DROP_WHITELIST="" \
+  -e TABLE_DDL_TRUNCATE_WHITELIST="" \
   -- npx @benborla29/mcp-server-mysql
 ```
 
@@ -235,13 +349,12 @@ claude mcp add mcp_server_mysql \
   -e MYSQL_CACHE_TTL="60000" \
   -e MYSQL_RATE_LIMIT="100" \
   -e MYSQL_SSL="true" \
-  -e TABLE_INSERT_WHITELIST='[]' \
-  -e TABLE_UPDATE_WHITELIST='[]' \
-  -e TABLE_DELETE_WHITELIST='[]' \
-  -e TABLE_DDL_CREATE_WHITELIST='[]' \
-  -e TABLE_DDL_ALTER_WHITELIST='[]' \
-  -e TABLE_DDL_DROP_WHITELIST='[]' \
-  -e TABLE_DDL_TRUNCATE_WHITELIST='[]' \
+  -e TABLE_INSERT_WHITELIST="" \
+  -e TABLE_UPDATE_WHITELIST="" \
+  -e TABLE_DELETE_WHITELIST="" \
+  -e TABLE_DDL_ALTER_WHITELIST="" \
+  -e TABLE_DDL_DROP_WHITELIST="" \
+  -e TABLE_DDL_TRUNCATE_WHITELIST="" \
   -e ENABLE_LOGGING="true" \
   -- npx @benborla29/mcp-server-mysql
 ```
@@ -511,14 +624,14 @@ For more control over the MCP server's behavior, you can use these advanced conf
         "MYSQL_LOG_LEVEL": "info",
         "MYSQL_METRICS_ENABLED": "true",
 
-        // Granular write permissions (JSON arrays)
-        "TABLE_INSERT_WHITELIST": ["[]"],
-        "TABLE_UPDATE_WHITELIST": ["[]"],
-        "TABLE_DELETE_WHITELIST": ["[]"],
-        "TABLE_DDL_CREATE_WHITELIST": ["[]"],
-        "TABLE_DDL_ALTER_WHITELIST": ["[]"],
-        "TABLE_DDL_DROP_WHITELIST": ["[]"],
-        "TABLE_DDL_TRUNCATE_WHITELIST": ["[]"]
+        // Granular write permissions (comma-separated strings)
+        "TABLE_INSERT_WHITELIST": "",
+        "TABLE_UPDATE_WHITELIST": "",
+        "TABLE_DELETE_WHITELIST": "",
+        // Note: CREATE TABLE is always allowed without whitelist!
+        "TABLE_DDL_ALTER_WHITELIST": "",
+        "TABLE_DDL_DROP_WHITELIST": "",
+        "TABLE_DDL_TRUNCATE_WHITELIST": ""
       }
     }
   }
@@ -566,15 +679,15 @@ When `MYSQL_CONNECTION_STRING` is provided, it takes precedence over individual 
 ### Granular Whitelist Configuration
 
 **DML (Data Manipulation Language) Operations:**
-- `TABLE_INSERT_WHITELIST`: JSON array of tables where INSERT is allowed (default: [])
-- `TABLE_UPDATE_WHITELIST`: JSON array of tables where UPDATE is allowed (default: [])
-- `TABLE_DELETE_WHITELIST`: JSON array of tables where DELETE is allowed (default: [])
+- `TABLE_INSERT_WHITELIST`: Comma-separated list of tables where INSERT is allowed (default: "")
+- `TABLE_UPDATE_WHITELIST`: Comma-separated list of tables where UPDATE is allowed (default: "")
+- `TABLE_DELETE_WHITELIST`: Comma-separated list of tables where DELETE is allowed (default: "")
 
 **DDL (Data Definition Language) Operations:**
-- `TABLE_DDL_CREATE_WHITELIST`: JSON array of tables where CREATE TABLE is allowed (default: [])
-- `TABLE_DDL_ALTER_WHITELIST`: JSON array of tables where ALTER TABLE is allowed (default: [])
-- `TABLE_DDL_DROP_WHITELIST`: JSON array of tables where DROP TABLE is allowed (default: [])
-- `TABLE_DDL_TRUNCATE_WHITELIST`: JSON array of tables where TRUNCATE is allowed (default: [])
+- `TABLE_DDL_ALTER_WHITELIST`: Comma-separated list of tables where ALTER TABLE is allowed (default: "")
+- `TABLE_DDL_DROP_WHITELIST`: Comma-separated list of tables where DROP TABLE is allowed (default: "")
+- `TABLE_DDL_TRUNCATE_WHITELIST`: Comma-separated list of tables where TRUNCATE is allowed (default: "")
+- **Note:** CREATE TABLE is always allowed without whitelist (removed from upstream)
 
 See [Granular Whitelist Permissions](#granular-whitelist-permissions) for details and examples.
 - `MYSQL_DISABLE_READ_ONLY_TRANSACTIONS`: Disable read-only transaction enforcement (default: "false") ⚠️ **Security Warning:** Only enable this if you need full write capabilities and trust the LLM with your database
@@ -627,29 +740,33 @@ All tables are **read-only by default** for security. Only explicitly whiteliste
 
 Configure 7 independent whitelists (one per operation type):
 
-**Environment Variable Format (JSON array string):**
+**Environment Variable Format (comma-separated strings):**
+
+⚠️ **Important:** This fork uses **comma-separated strings**, not JSON arrays!
 
 ```bash
 # Allow INSERT on specific tables
-TABLE_INSERT_WHITELIST='["production.users", "*.logs"]'
+TABLE_INSERT_WHITELIST="production.users,*.logs"
 
 # Allow UPDATE on specific tables
-TABLE_UPDATE_WHITELIST='["production.users", "production.orders"]'
+TABLE_UPDATE_WHITELIST="production.users,production.orders"
 
 # Allow DELETE on specific tables
-TABLE_DELETE_WHITELIST='["production.temp_*"]'
+TABLE_DELETE_WHITELIST="production.temp_*"
 
 # DDL operations
-TABLE_DDL_CREATE_WHITELIST='["production.temp_*"]'
-TABLE_DDL_ALTER_WHITELIST='["production.users"]'
-TABLE_DDL_DROP_WHITELIST='["production.temp_*"]'
-TABLE_DDL_TRUNCATE_WHITELIST='["production.logs"]'
+# Note: CREATE TABLE is always allowed without whitelist!
+TABLE_DDL_ALTER_WHITELIST="production.users"
+TABLE_DDL_DROP_WHITELIST="production.temp_*"
+TABLE_DDL_TRUNCATE_WHITELIST="production.logs"
 
-# Empty arrays = all operations of that type are denied (safe default)
-TABLE_INSERT_WHITELIST='[]'
+# Empty strings = all operations of that type are denied (safe default)
+TABLE_INSERT_WHITELIST=""
 ```
 
-**MCP Configuration File Format (recommended):**
+**MCP Configuration File Format (.mcp.json):**
+
+⚠️ **Important:** This fork uses **comma-separated strings**, not JSON arrays!
 
 ```json
 {
@@ -661,13 +778,12 @@ TABLE_INSERT_WHITELIST='[]'
         "MYSQL_HOST": "127.0.0.1",
         "MYSQL_USER": "root",
         "MYSQL_DB": "production",
-        "TABLE_INSERT_WHITELIST": ["production.users", "*.logs"],
-        "TABLE_UPDATE_WHITELIST": ["production.users"],
-        "TABLE_DELETE_WHITELIST": ["production.temp_*"],
-        "TABLE_DDL_CREATE_WHITELIST": ["production.temp_*"],
-        "TABLE_DDL_ALTER_WHITELIST": [],
-        "TABLE_DDL_DROP_WHITELIST": [],
-        "TABLE_DDL_TRUNCATE_WHITELIST": ["production.logs"]
+        "TABLE_INSERT_WHITELIST": "production.users,*.logs",
+        "TABLE_UPDATE_WHITELIST": "production.users",
+        "TABLE_DELETE_WHITELIST": "production.temp_*",
+        "TABLE_DDL_ALTER_WHITELIST": "",
+        "TABLE_DDL_DROP_WHITELIST": "production.temp_*",
+        "TABLE_DDL_TRUNCATE_WHITELIST": "production.logs"
       }
     }
   }
@@ -695,23 +811,22 @@ All whitelists support simple `*` wildcard patterns:
 | INSERT | `TABLE_INSERT_WHITELIST` | ❌ Denied | Insert new records |
 | UPDATE | `TABLE_UPDATE_WHITELIST` | ❌ Denied | Update existing records |
 | DELETE | `TABLE_DELETE_WHITELIST` | ❌ Denied | Delete records |
-| CREATE TABLE | `TABLE_DDL_CREATE_WHITELIST` | ❌ Denied | Create new tables |
+| CREATE TABLE | None | ✅ **Always allowed** | Create new tables (no whitelist needed!) |
 | ALTER TABLE | `TABLE_DDL_ALTER_WHITELIST` | ❌ Denied | Modify table structure |
 | DROP TABLE | `TABLE_DDL_DROP_WHITELIST` | ❌ Denied | Delete tables |
 | TRUNCATE | `TABLE_DDL_TRUNCATE_WHITELIST` | ❌ Denied | Clear all records |
 
 ### Example: Different Permissions per Table
 
-```json
-{
-  "TABLE_INSERT_WHITELIST": ["production.users", "production.orders"],
-  "TABLE_UPDATE_WHITELIST": ["production.users"],
-  "TABLE_DELETE_WHITELIST": ["production.temp_*"],
-  "TABLE_DDL_CREATE_WHITELIST": ["production.temp_*"],
-  "TABLE_DDL_ALTER_WHITELIST": [],
-  "TABLE_DDL_DROP_WHITELIST": [],
-  "TABLE_DDL_TRUNCATE_WHITELIST": ["production.logs"]
-}
+```bash
+# Comma-separated format
+TABLE_INSERT_WHITELIST="production.users,production.orders"
+TABLE_UPDATE_WHITELIST="production.users"
+TABLE_DELETE_WHITELIST="production.temp_*"
+# Note: CREATE TABLE is always allowed!
+TABLE_DDL_ALTER_WHITELIST=""
+TABLE_DDL_DROP_WHITELIST=""
+TABLE_DDL_TRUNCATE_WHITELIST="production.logs"
 ```
 
 **Result:**
