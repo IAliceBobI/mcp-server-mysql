@@ -56,12 +56,13 @@ export const mcpConfig = {
           port: connectionStringConfig.port || Number(process.env.MYSQL_PORT || "3306"),
         }),
     user: connectionStringConfig.user || process.env.MYSQL_USER || "root",
-    password:
-      connectionStringConfig.password !== undefined
-        ? connectionStringConfig.password
-        : process.env.MYSQL_PASS === undefined
-          ? ""
-          : process.env.MYSQL_PASS,
+    ...(connectionStringConfig.password !== undefined || (process.env.MYSQL_PASS && process.env.MYSQL_PASS.length > 0)
+      ? {
+          password: connectionStringConfig.password !== undefined
+            ? connectionStringConfig.password
+            : process.env.MYSQL_PASS,
+        }
+      : {}),
     database: connectionStringConfig.database || process.env.MYSQL_DB || undefined, // Allow undefined database for multi-DB mode
     connectionLimit: 10,
     waitForConnections: true,
@@ -69,16 +70,18 @@ export const mcpConfig = {
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     connectTimeout: process.env.MYSQL_CONNECT_TIMEOUT ? parseInt(process.env.MYSQL_CONNECT_TIMEOUT, 10) : 10000,
-    authPlugins: {
-      mysql_clear_password: () => () =>
-        Buffer.from(
-          connectionStringConfig.password !== undefined
-            ? connectionStringConfig.password
-            : process.env.MYSQL_PASS !== undefined
-              ? process.env.MYSQL_PASS
-              : ""
-        ),
-    },
+    ...(connectionStringConfig.password !== undefined || (process.env.MYSQL_PASS && process.env.MYSQL_PASS.length > 0)
+      ? {
+          authPlugins: {
+            mysql_clear_password: () => () =>
+              Buffer.from(
+                connectionStringConfig.password !== undefined
+                  ? connectionStringConfig.password
+                  : process.env.MYSQL_PASS || ""
+              ),
+          },
+        }
+      : {}),
     ...(process.env.MYSQL_SSL === "true"
       ? {
           ssl: {

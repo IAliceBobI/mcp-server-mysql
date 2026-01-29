@@ -43,9 +43,13 @@ async function setupTestDatabase() {
         }
     ),
     user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASS || 'root', // Default to 'root' if not specified
     multipleStatements: true
   };
+
+  // Only add password if it's explicitly set (non-empty)
+  if (process.env.MYSQL_PASS && process.env.MYSQL_PASS.length > 0) {
+    config.password = process.env.MYSQL_PASS;
+  }
 
   // First connect without database to create it if needed
   const connection = await mysql2.createConnection(config);

@@ -278,36 +278,29 @@ describe("MySQL Integration", () => {
       }
     });
 
-    it("should block INSERT operations when not allowed", async () => {
-      // Set the flag to false for this test
-      const originalValue = process.env.ALLOW_INSERT_OPERATION;
-      process.env.ALLOW_INSERT_OPERATION = "false";
+    it("should block INSERT operations when table not in whitelist", async () => {
+      // write_ops_test is not in the whitelist from .env.test
+      const result = await executeReadOnlyQuery(
+        'INSERT INTO write_ops_test (name, value) VALUES ("Blocked Insert", 100)',
+      );
 
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain(
+        "Write operation not allowed",
+      );
+      expect(result.content[0].text).toContain("TABLE_WRITE_WHITELIST");
+
+      // Verify the record was not inserted
+      const connection = await pool.getConnection();
       try {
-        const result = await executeReadOnlyQuery(
-          'INSERT INTO write_ops_test (name, value) VALUES ("Blocked Insert", 100)',
-        );
+        const [rows] = (await connection.query(
+          "SELECT * FROM write_ops_test WHERE name = ?",
+          ["Blocked Insert"],
+        )) as [any[], any];
 
-        expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain(
-          "INSERT operations are not allowed",
-        );
-
-        // Verify the record was not inserted
-        const connection = await pool.getConnection();
-        try {
-          const [rows] = (await connection.query(
-            "SELECT * FROM write_ops_test WHERE name = ?",
-            ["Blocked Insert"],
-          )) as [any[], any];
-
-          expect(rows.length).toBe(0); // Record should not exist
-        } finally {
-          connection.release();
-        }
+        expect(rows.length).toBe(0); // Record should not exist
       } finally {
-        // Restore original flag value
-        process.env.ALLOW_INSERT_OPERATION = originalValue;
+        connection.release();
       }
     });
   });

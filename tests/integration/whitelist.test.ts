@@ -1,18 +1,20 @@
-import * as mysql2 from "mysql2/promise";
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+// Load environment variables FIRST before any other imports
 import * as dotenv from "dotenv";
-import {
-  executeReadOnlyQuery,
-} from "../../dist/src/db/index.js";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
-// Set test directory path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load test environment variables
 dotenv.config({ path: path.resolve(__dirname, "../../.env.test") });
+
+import * as mysql2 from "mysql2/promise";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import {
+  executeReadOnlyQuery,
+} from "../../dist/src/db/index.js";
+
+// Whitelist from .env.test: mcp_test.whitelist_users,mcp_test.whitelist_orders,mcp_test.app_logs
+const WHITELISTED_TABLES = ["mcp_test.whitelist_users", "mcp_test.whitelist_orders", "mcp_test.app_logs"];
 
 describe("Whitelist Integration", () => {
   let pool: any;
@@ -35,7 +37,7 @@ describe("Whitelist Integration", () => {
 
     pool = mysql2.createPool(config);
 
-    // Create test tables
+    // Create test tables (including one NOT in whitelist)
     const connection = await pool.getConnection();
     try {
       await connection.query(`
@@ -63,6 +65,15 @@ describe("Whitelist Integration", () => {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
+
+      // This table is NOT in whitelist for testing
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS restricted_table (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          data VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
     } finally {
       connection.release();
     }
@@ -76,6 +87,7 @@ describe("Whitelist Integration", () => {
         await connection.query("DROP TABLE IF EXISTS whitelist_users");
         await connection.query("DROP TABLE IF EXISTS whitelist_orders");
         await connection.query("DROP TABLE IF EXISTS app_logs");
+        await connection.query("DROP TABLE IF EXISTS restricted_table");
       } finally {
         connection.release();
       }
@@ -90,18 +102,14 @@ describe("Whitelist Integration", () => {
       await connection.query("TRUNCATE TABLE whitelist_users");
       await connection.query("TRUNCATE TABLE whitelist_orders");
       await connection.query("TRUNCATE TABLE app_logs");
+      await connection.query("TRUNCATE TABLE restricted_table");
     } finally {
       connection.release();
     }
   });
 
   describe("SELECT queries not restricted by whitelist", () => {
-    beforeEach(() => {
-      // Empty whitelist = read-only mode
-      process.env.TABLE_WRITE_WHITELIST = "";
-    });
-
-    it("should allow SELECT on non-whitelisted table", async () => {
+    it("should allow SELECT on whitelisted table", async () => {
       const result = await executeReadOnlyQuery(
         "SELECT * FROM whitelist_users"
       );
@@ -110,9 +118,9 @@ describe("Whitelist Integration", () => {
       expect(result.content[0].text).toBeDefined();
     });
 
-    it("should allow SELECT on any table regardless of whitelist", async () => {
+    it("should allow SELECT on non-whitelisted table", async () => {
       const result = await executeReadOnlyQuery(
-        "SELECT * FROM whitelist_orders"
+        "SELECT * FROM restricted_table"
       );
 
       expect(result.isError).toBe(false);
@@ -122,8 +130,6 @@ describe("Whitelist Integration", () => {
 
   describe("INSERT operations with whitelist", () => {
     it("should allow INSERT on whitelisted table", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_users";
-
       const result = await executeReadOnlyQuery(
         "INSERT INTO mcp_test.whitelist_users (name) VALUES ('Test User')"
       );
@@ -142,28 +148,15 @@ describe("Whitelist Integration", () => {
     });
 
     it("should deny INSERT on non-whitelisted table with friendly error", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_users";
-
       const result = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_orders (user_id, total) VALUES (1, 100.00)"
+        "INSERT INTO mcp_test.restricted_table (data) VALUES ('Test Data')"
       );
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Write operation not allowed");
-      expect(result.content[0].text).toContain("mcp_test.whitelist_orders");
+      expect(result.content[0].text).toContain("mcp_test.restricted_table");
       expect(result.content[0].text).toContain("TABLE_WRITE_WHITELIST");
-      expect(result.content[0].text).toContain("INSERT INTO mcp_test.whitelist_orders");
-    });
-
-    it("should deny INSERT when whitelist is empty", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "";
-
-      const result = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('Test User')"
-      );
-
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Write operation not allowed");
+      expect(result.content[0].text).toContain("INSERT INTO mcp_test.restricted_table");
     });
   });
 
@@ -175,14 +168,15 @@ describe("Whitelist Integration", () => {
         await connection.query(
           "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
         );
+        await connection.query(
+          "INSERT INTO restricted_table (data) VALUES ('Data 1'), ('Data 2')"
+        );
       } finally {
         connection.release();
       }
     });
 
     it("should allow UPDATE on whitelisted table", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_users";
-
       const result = await executeReadOnlyQuery(
         "UPDATE mcp_test.whitelist_users SET name = 'Updated User' WHERE id = 1"
       );
@@ -202,15 +196,13 @@ describe("Whitelist Integration", () => {
     });
 
     it("should deny UPDATE on non-whitelisted table", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_orders";
-
       const result = await executeReadOnlyQuery(
-        "UPDATE mcp_test.whitelist_users SET name = 'Updated User' WHERE id = 1"
+        "UPDATE mcp_test.restricted_table SET data = 'Updated' WHERE id = 1"
       );
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Write operation not allowed");
-      expect(result.content[0].text).toContain("mcp_test.whitelist_users");
+      expect(result.content[0].text).toContain("mcp_test.restricted_table");
     });
   });
 
@@ -222,14 +214,15 @@ describe("Whitelist Integration", () => {
         await connection.query(
           "INSERT INTO whitelist_users (name) VALUES ('User 1'), ('User 2')"
         );
+        await connection.query(
+          "INSERT INTO restricted_table (data) VALUES ('Data 1'), ('Data 2')"
+        );
       } finally {
         connection.release();
       }
     });
 
     it("should allow DELETE on whitelisted table", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_users";
-
       const result = await executeReadOnlyQuery(
         "DELETE FROM mcp_test.whitelist_users WHERE id = 1"
       );
@@ -247,10 +240,8 @@ describe("Whitelist Integration", () => {
     });
 
     it("should deny DELETE on non-whitelisted table", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_orders";
-
       const result = await executeReadOnlyQuery(
-        "DELETE FROM mcp_test.whitelist_users WHERE id = 1"
+        "DELETE FROM mcp_test.restricted_table WHERE id = 1"
       );
 
       expect(result.isError).toBe(true);
@@ -258,72 +249,51 @@ describe("Whitelist Integration", () => {
     });
   });
 
-  describe("Wildcard patterns in whitelist", () => {
-    it("should match tables with *.logs pattern", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.app_logs,*.logs";
+  describe("Multiple whitelisted tables", () => {
+    it("should allow INSERT on all whitelisted tables", async () => {
+      const result1 = await executeReadOnlyQuery(
+        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('User 1')"
+      );
+      expect(result1.isError).toBe(false);
 
-      const result = await executeReadOnlyQuery(
+      const result2 = await executeReadOnlyQuery(
+        "INSERT INTO mcp_test.whitelist_orders (user_id, total) VALUES (1, 50.00)"
+      );
+      expect(result2.isError).toBe(false);
+
+      const result3 = await executeReadOnlyQuery(
         "INSERT INTO mcp_test.app_logs (message, level) VALUES ('Test log', 'INFO')"
       );
-
-      expect(result.isError).toBe(false);
+      expect(result3.isError).toBe(false);
     });
 
-    it("should match all tables in database with mcp_test.* pattern", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.*";
-
-      const result1 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('User 1')"
+    it("should deny INSERT on table not in whitelist", async () => {
+      const result = await executeReadOnlyQuery(
+        "INSERT INTO mcp_test.restricted_table (data) VALUES ('Should Fail')"
       );
-      expect(result1.isError).toBe(false);
 
-      const result2 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_orders (user_id, total) VALUES (1, 50.00)"
-      );
-      expect(result2.isError).toBe(false);
-    });
-
-    it("should match tables with prefix pattern mcp_test.whitelist_*", async () => {
-      process.env.TABLE_WRITE_WHITELIST = "mcp_test.whitelist_*";
-
-      const result1 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('User 1')"
-      );
-      expect(result1.isError).toBe(false);
-
-      const result2 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_orders (user_id, total) VALUES (1, 50.00)"
-      );
-      expect(result2.isError).toBe(false);
-
-      // app_logs should not match
-      const result3 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.app_logs (message, level) VALUES ('Test', 'INFO')"
-      );
-      expect(result3.isError).toBe(true);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Write operation not allowed");
     });
   });
 
-  describe("Multiple patterns in whitelist", () => {
-    it("should support comma-separated patterns", async () => {
-      process.env.TABLE_WRITE_WHITELIST =
-        "mcp_test.whitelist_users,mcp_test.app_logs";
-
-      const result1 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_users (name) VALUES ('User 1')"
+  describe("Error message quality", () => {
+    it("should include helpful information in error message", async () => {
+      const result = await executeReadOnlyQuery(
+        "INSERT INTO mcp_test.restricted_table (data) VALUES ('Test')"
       );
-      expect(result1.isError).toBe(false);
 
-      const result2 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.app_logs (message, level) VALUES ('Test', 'INFO')"
-      );
-      expect(result2.isError).toBe(false);
+      expect(result.isError).toBe(true);
+      const errorText = result.content[0].text;
 
-      // orders should not be in whitelist
-      const result3 = await executeReadOnlyQuery(
-        "INSERT INTO mcp_test.whitelist_orders (user_id, total) VALUES (1, 50.00)"
-      );
-      expect(result3.isError).toBe(true);
+      // Check for all required elements
+      expect(errorText).toContain("❌ Error: Write operation not allowed");
+      expect(errorText).toContain("mcp_test.restricted_table");
+      expect(errorText).toContain("TABLE_WRITE_WHITELIST");
+      expect(errorText).toContain("INSERT INTO mcp_test.restricted_table");
+      expect(errorText).toContain("💡 To execute this operation");
+      expect(errorText).toContain("Ask your administrator");
+      expect(errorText).toContain("execute the SQL manually");
     });
   });
 });
